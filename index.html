@@ -55,11 +55,33 @@
 
   /* hero stat — the single most prominent number on the home screen */
   .hero{
-    padding:76px 4px 84px 4px;
-    text-align:center;
+    position:relative;
+    display:flex;
+    align-items:center;
+    min-height:190px;
+    padding:38px 4px 46px 4px;
+  }
+  .hero-photo{
+    position:absolute;
+    top:-22px;
+    left:-46px;
+    width:210px;
+    height:auto;
+    transform:rotate(-8deg);
+    pointer-events:none;
+    user-select:none;
+    z-index:0;
+  }
+  .hero-text{
+    position:relative;
+    z-index:1;
+    margin-left:auto;
+    text-align:right;
+    max-width:62%;
+    padding-right:4px;
   }
   .hero-value{
-    font-size:48px;
+    font-size:44px;
     font-weight:800;
     letter-spacing:-0.02em;
     font-variant-numeric:tabular-nums;
@@ -373,10 +395,16 @@
 
   .lovecard{
     text-align:center;
-    padding:44px 16px 40px 16px;
+    padding:24px 16px 40px 16px;
+  }
+  .lovephoto{
+    width:220px;
+    height:auto;
+    margin:0 auto 26px auto;
+    display:block;
   }
   .loveheart{
-    font-size:56px;
+    font-size:40px;
     line-height:1;
     animation:heartbeat 2.4s ease-in-out infinite;
   }
@@ -795,8 +823,11 @@ function renderHome(){
     ${state.loadError ? bannerErr() : ''}
     ${(!state.loaded && state.loading) ? bannerLoading() : ''}
     <div class="hero">
-      <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
-      <div class="hero-label">since last feed</div>
+      <img class="hero-photo" src="baby-photo.png" alt="">
+      <div class="hero-text">
+        <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
+        <div class="hero-label">since last feed</div>
+      </div>
     </div>
     <div class="actions">
       <button class="actionbtn feed" data-open="feed">
@@ -1107,6 +1138,7 @@ function renderAbout(){
   return `
     <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:100%;">
       <div class="lovecard">
+        <img class="lovephoto" src="baby-photo.png" alt="">
         <div class="loveheart">❤️</div>
         <div class="lovetitle">Made with love,<br>for our little Kunju Money</div>
         <div class="lovesub">Every bottle, every diaper, every gram — tracked with care.</div>
