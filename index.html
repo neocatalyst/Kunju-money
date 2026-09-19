@@ -56,7 +56,7 @@
     display:flex;
     align-items:flex-start;
     min-height:300px;
-    margin-top:288px;
+    margin-top:144px;
     padding:24px 4px 46px 4px;
   }
   .hero-photo{
@@ -144,10 +144,8 @@
     display:flex;
     align-items:center;
     gap:12px;
-    padding:13px 4px;
-    border-bottom:1px solid var(--line);
+    padding:16px 4px;
   }
-  .entry:last-child{ border-bottom:none; }
   .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
   .dot.feed{ background:var(--milk); }
   .dot.wet{ background:var(--wet); }
@@ -232,11 +230,18 @@
     max-width:480px;
     margin:0 auto;
     z-index:20;
-    background:rgba(30,32,44,0.96);
-    backdrop-filter:blur(14px);
-    border-top:1px solid var(--line);
+    background:var(--bg);
     display:flex;
     padding:8px 6px calc(8px + env(safe-area-inset-bottom)) 6px;
+  }
+  .tabbar::before{
+    content:'';
+    position:absolute;
+    left:0; right:0;
+    bottom:100%;
+    height:32px;
+    background:linear-gradient(to bottom, rgba(21,22,31,0), var(--bg));
+    pointer-events:none;
   }
   .tabbtn{
     flex:1;
