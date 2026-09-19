@@ -124,7 +124,7 @@
   .actionbtn{
     flex:1;
     border:none;
-    border-radius:var(--radius);
+    border-radius:26px;
     padding:22px 10px 18px 10px;
     display:flex;
     flex-direction:column;
@@ -135,6 +135,30 @@
     transition:transform 0.12s ease;
   }
   .actionbtn:active{ transform:scale(0.96); }
+
+  /* one-time attention-drawing shimmer ring around Log Bottle on load.
+     The ring is a separate pseudo-element sitting behind the button
+     (not a mask on the button itself), so it can fade out on its own
+     without touching the button's own appearance. */
+  @property --shimmer-angle{
+    syntax:'<angle>';
+    initial-value:0deg;
+    inherits:false;
+  }
+  .shimmer-wrap{ flex:1; position:relative; }
+  .shimmer-wrap::before{
+    content:'';
+    position:absolute;
+    inset:-1.5px;
+    border-radius:29px;
+    background:conic-gradient(from var(--shimmer-angle,0deg), transparent 0%, var(--milk) 8%, transparent 20%, transparent 100%);
+    z-index:0;
+    pointer-events:none;
+    animation:shimmer-spin 1.8s linear 4 forwards, shimmer-fadeout 0.6s ease-out 7.2s forwards;
+  }
+  .shimmer-wrap .actionbtn{ position:relative; z-index:1; width:100%; }
+  @keyframes shimmer-spin{ to{ --shimmer-angle:360deg; } }
+  @keyframes shimmer-fadeout{ to{ opacity:0; } }
   .actionbtn.feed{ background:linear-gradient(135deg, var(--milk), #c99347); color:#241d0a; }
   .actionbtn.diaper{ background:linear-gradient(135deg, var(--diaper), #427c69); color:#0d1e19; }
   .actionbtn .ico{ font-size:28px; }
@@ -862,12 +886,14 @@ function renderHome(){
       </div>
     </div>
     <div class="actions">
-      <button class="actionbtn feed" data-open="feed">
-        <span class="ico">🍼</span><span class="lbl">Log Bottle</span>
-      </button>
       <button class="actionbtn diaper" data-open="diaper">
         <span class="ico">👶</span><span class="lbl">Log Diaper</span>
       </button>
+      <div class="shimmer-wrap">
+        <button class="actionbtn feed" data-open="feed">
+          <span class="ico">🍼</span><span class="lbl">Log Bottle</span>
+        </button>
+      </div>
     </div>
     <div class="sectiontitle" style="margin-top:44px; margin-bottom:2px; border-bottom:none; padding-bottom:0; display:flex; align-items:center; gap:8px;">
       <span>Recent activity</span>
