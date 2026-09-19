@@ -56,7 +56,7 @@
     display:flex;
     align-items:flex-start;
     min-height:300px;
-    margin-top:80px;
+    margin-top:104px;
     padding:24px 4px 46px 4px;
   }
   .hero-photo{
@@ -234,7 +234,7 @@
     z-index:20;
     background:var(--bg);
     display:flex;
-    padding:10px 6px calc(10px + env(safe-area-inset-bottom)) 6px;
+    padding:6px 6px calc(14px + env(safe-area-inset-bottom)) 6px;
     transform:translate3d(0,0,0);
     -webkit-transform:translate3d(0,0,0);
     will-change:transform;
@@ -405,17 +405,17 @@
   .settingsblock .help{ font-size:12px; color:var(--text-dim); margin-top:8px; line-height:1.5; }
 
   .lovecard{
-    padding:8px 16px 40px 16px;
+    padding:8px 16px 10px 16px;
   }
   .aboutrow{
     position:relative;
-    min-height:470px;
+    min-height:500px;
   }
   .about-photo{
     position:absolute;
     bottom:0;
     left:-46px;
-    width:320px;
+    width:365px;
     height:auto;
     transform:rotate(-6deg);
     pointer-events:none;
@@ -446,7 +446,6 @@
   .lovetitle{
     font-size:23px;
     font-weight:500;
-    font-style:italic;
     letter-spacing:-0.005em;
     margin-top:12px;
     line-height:1.4;
@@ -855,7 +854,7 @@ function renderHome(){
       <div class="hero-text">
         <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
         <div class="hero-label">since last feed</div>
-        <div class="statuscard" style="margin-top:22px; text-align:right;"><div class="n">${mlToday}</div><div class="l">ml in 24h</div></div>
+        <div class="statuscard" style="margin-top:34px; text-align:right;"><div class="n">${mlToday}</div><div class="l">ml in 24h</div></div>
       </div>
     </div>
     <div class="actions">
