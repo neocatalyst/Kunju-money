@@ -171,14 +171,14 @@
     position:absolute;
     inset:2px;
     border-radius:calc(var(--radius) - 2px);
-    background:linear-gradient(135deg, #d9ab54, #a8763a);
+    background:linear-gradient(135deg, var(--milk), #c99347);
     z-index:1;
   }
   .actionbtn.feed .ico, .actionbtn.feed .lbl{ position:relative; z-index:2; }
   @keyframes shimmer-spin{ to{ --shimmer-angle:360deg; } }
   @keyframes shimmer-fadeout{ to{ opacity:0; } }
-  .actionbtn.feed{ background:linear-gradient(135deg, #d9ab54, #a8763a); color:#241d0a; }
-  .actionbtn.diaper{ background:linear-gradient(135deg, #5f9c88, #345f4f); color:#0d1e19; }
+  .actionbtn.feed{ background:linear-gradient(135deg, var(--milk), #c99347); color:#241d0a; }
+  .actionbtn.diaper{ background:linear-gradient(135deg, var(--diaper), #427c69); color:#0d1e19; }
   .actionbtn .ico{ font-size:28px; }
   .actionbtn .lbl{ font-size:15px; font-weight:700; }
 
@@ -437,13 +437,10 @@
   .typegrid button{
     flex:1; padding:18px 8px; border-radius:var(--radius-sm); border:1.5px solid var(--line);
     background:var(--surface-2); color:var(--text-dim); font-family:inherit; font-weight:700; font-size:14px; cursor:pointer;
-    transition:transform 0.1s ease;
+    transition:transform 0.1s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .typegrid button:active{ transform:scale(0.96); }
-  .typegrid button.sel{ color:#0d1e19; }
-  .typegrid button[data-t=wet].sel{ background:var(--diaper); border-color:var(--diaper); color:#0d1e19; }
-  .typegrid button[data-t=dirty].sel{ background:var(--diaper); border-color:var(--diaper); color:#0d1e19; }
-  .typegrid button[data-t=both].sel{ background:var(--diaper); border-color:var(--diaper); color:#0d1e19; }
+  .typegrid button.sel{ background:var(--surface-2); border-color:var(--diaper); border-width:2px; color:var(--diaper); }
 
   .modalbtns{ display:flex; gap:10px; margin-top:8px; }
   .btn{
@@ -1522,6 +1519,17 @@ function openEditWeight(id){
 
 /* ---------------- event wiring ---------------- */
 function attachHandlers(){
+  // Tapping the dark backdrop (not the modal card itself) dismisses
+  // whichever modal is open, by reusing that modal's own Cancel/Close/
+  // Delete-cancel button — same logic, zero duplication, guaranteed
+  // to match exactly what tapping that button would already do.
+  document.querySelectorAll('.modalbg').forEach(bg=>{
+    bg.onclick = (e)=>{
+      if(e.target !== bg) return;
+      const dismissBtn = bg.querySelector('.btn.ghost');
+      if(dismissBtn) dismissBtn.click();
+    };
+  });
   document.querySelectorAll('[data-tab]').forEach(b=>{
     b.onclick = ()=>{ state.tab = b.dataset.tab; render(); scrollToTop(); if(state.tab==='trends') setTimeout(drawCharts, 30); };
   });
