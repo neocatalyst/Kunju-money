@@ -32,6 +32,8 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; touch-action:manipulation;}
   html,body{
     margin:0;
+    overscroll-behavior-y:none;
+    overscroll-behavior:none;
   }
   body{
     background:var(--bg);
@@ -138,6 +140,15 @@
     margin:40px 0 16px 0;
     padding-bottom:10px;
     border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+  }
+  .sectiondot{
+    display:inline-block;
+    width:8px; height:8px;
+    border-radius:50%;
+    margin-right:8px;
+    flex-shrink:0;
   }
 
   .entry{
@@ -233,6 +244,10 @@
     background:var(--bg);
     display:flex;
     padding:8px 6px calc(8px + env(safe-area-inset-bottom)) 6px;
+    transform:translateZ(0);
+    -webkit-transform:translateZ(0);
+    will-change:transform;
+    backface-visibility:hidden;
   }
   .tabbar::before{
     content:'';
@@ -402,8 +417,7 @@
     padding:8px 16px 40px 16px;
   }
   .lovephoto{
-    width:310px;
-    max-width:88%;
+    width:100%;
     height:auto;
     margin:28px auto 0 auto;
     display:block;
@@ -922,6 +936,8 @@ function renderTrends(){
   const dirty = diapers.filter(d=>d.type==='dirty').length;
   const both = diapers.filter(d=>d.type==='both').length;
 
+  const dot = (color)=>`<span class="sectiondot" style="background:${color}"></span>`;
+
   return `
     ${state.loadError ? bannerErr() : ''}
     <div class="periodtabs">
@@ -929,20 +945,21 @@ function renderTrends(){
       <button class="${state.period===168?'active':''}" data-period="168">Week</button>
       <button class="${state.period===720?'active':''}" data-period="720">Month</button>
     </div>
-    <div class="sectiontitle" style="margin-top:0;">Feeding — ${periodLabel(state.period)}</div>
+    <div class="sectiontitle" style="margin-top:0;">${dot('var(--milk)')}Feeding — ${periodLabel(state.period)}</div>
     <div class="statgrid">
       <div class="statbig"><div class="v">${feeds.length}</div><div class="k">bottles</div></div>
       <div class="statbig"><div class="v">${Math.round(totalMl)}</div><div class="k">total mL</div></div>
       <div class="statbig"><div class="v">${Math.round(avgMl)}</div><div class="k">avg mL / bottle</div></div>
       <div class="statbig"><div class="v">${avgIntervalStr}</div><div class="k">avg time between</div></div>
     </div>
-    <div class="sectiontitle">Diapers — ${periodLabel(state.period)}</div>
+    <div class="sectiontitle">${dot('var(--diaper)')}Diapers — ${periodLabel(state.period)}</div>
     <div class="statgrid">
       <div class="statbig"><div class="v">${diapers.length}</div><div class="k">total changes</div></div>
       <div class="statbig"><div class="v">${wet}</div><div class="k" style="color:var(--wet)">wet</div></div>
       <div class="statbig"><div class="v">${dirty}</div><div class="k" style="color:var(--dirty)">dirty</div></div>
       <div class="statbig"><div class="v">${both}</div><div class="k" style="color:var(--both)">both</div></div>
     </div>
+    <div class="sectiontitle">${dot('var(--wet)')}Daily trends</div>
     <div class="chartcard">
       <h3>Bottles per day (mL)</h3>
       <div class="chartwrap"><canvas id="feedChart"></canvas></div>
@@ -970,7 +987,7 @@ function renderGrowthSection(){
   }
   const sorted = [...state.weights].sort((a,b)=>b.ts-a.ts);
   return `
-    <div class="sectiontitle">Growth — weight for age</div>
+    <div class="sectiontitle"><span class="sectiondot" style="background:var(--both)"></span>Growth — weight for age</div>
     <div class="chartcard">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
         <h3 style="margin:0;">WHO reference (girls)</h3>
