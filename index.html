@@ -63,11 +63,11 @@
 
   /* hero stat — the single most prominent number on the home screen */
   .hero{
-    padding:20px 4px 26px 4px;
+    padding:56px 4px 64px 4px;
     text-align:center;
   }
   .hero-value{
-    font-size:44px;
+    font-size:48px;
     font-weight:800;
     letter-spacing:-0.02em;
     font-variant-numeric:tabular-nums;
@@ -77,7 +77,7 @@
   .hero-label{
     font-size:13px;
     color:var(--text-dim);
-    margin-top:6px;
+    margin-top:8px;
     font-weight:500;
   }
 
@@ -239,7 +239,8 @@
     transition:transform 0.1s ease;
   }
   .tabbtn:active{ transform:scale(0.92); }
-  .tabbtn .ico{ font-size:20px; }
+  .tabbtn .ico{ display:flex; }
+  .tabbtn .ico svg{ width:22px; height:22px; display:block; }
   .tabbtn .lbl{ font-size:10.5px; font-weight:600; }
   .tabbtn.active{ color:var(--milk); }
 
@@ -634,10 +635,10 @@ function render(){
   app.innerHTML = `
     <div class="screen">${body}</div>
     <div class="tabbar">
-      ${tabBtn('home','◐','Home')}
-      ${tabBtn('summary','▤','Summary')}
-      ${tabBtn('trends','⌁','Trends')}
-      ${tabBtn('settings','⚙','Settings')}
+      ${tabBtn('home','home','Home')}
+      ${tabBtn('summary','summary','Summary')}
+      ${tabBtn('trends','trends','Trends')}
+      ${tabBtn('settings','settings','Settings')}
     </div>
     ${state.modal==='feed' ? renderFeedModal() : ''}
     ${state.modal==='diaper' ? renderDiaperModal() : ''}
@@ -657,9 +658,15 @@ function render(){
     setTimeout(()=>drawWeightChart('weightChartExpanded', true), 30);
   }
 }
-function tabBtn(id, icon, label){
+const TAB_ICONS = {
+  home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h4v-6h2v6h4a1 1 0 0 0 1-1v-9"/></svg>`,
+  summary: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.2"/><path d="M8.5 9h7M8.5 13h7M8.5 17h4"/></svg>`,
+  trends: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16l5.5-5.5 4 4L20 7"/><path d="M15 7h5v5"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2.1" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2.1" fill="currentColor" stroke="none"/><circle cx="9" cy="17" r="2.1" fill="currentColor" stroke="none"/></svg>`
+};
+function tabBtn(id, iconKey, label){
   return `<button class="tabbtn ${state.tab===id?'active':''}" data-tab="${id}">
-    <span class="ico">${icon}</span><span class="lbl">${label}</span>
+    <span class="ico">${TAB_ICONS[iconKey]}</span><span class="lbl">${label}</span>
   </button>`;
 }
 function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -682,6 +689,10 @@ function renderHome(){
       <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
       <div class="hero-label">since last feed</div>
     </div>
+    <div class="statusrow">
+      <div class="statuscard"><div class="n">${feedsToday.length}</div><div class="l">Feeds in 24h</div></div>
+      <div class="statuscard"><div class="n">${mlToday}</div><div class="l">mL in 24h</div></div>
+    </div>
     <div class="actions">
       <button class="actionbtn feed" data-open="feed">
         <span class="ico">🍼</span><span class="lbl">Log Bottle</span>
@@ -690,13 +701,9 @@ function renderHome(){
         <span class="ico">👶</span><span class="lbl">Log Diaper</span>
       </button>
     </div>
-    <div class="statusrow">
-      <div class="statuscard"><div class="n">${feedsToday.length}</div><div class="l">feeds, last 24h</div></div>
-      <div class="statuscard"><div class="n">${mlToday}</div><div class="l">mL, last 24h</div></div>
-    </div>
     <div style="display:flex; align-items:center; justify-content:space-between;">
       <div class="sectiontitle" style="margin-top:0; flex:1; border-bottom:none; padding-bottom:0;">Recent activity</div>
-      <button class="refreshbtn" id="refresh-home">↻ Refresh</button>
+      <button class="refreshbtn" id="refresh-home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px;"><path d="M20 11A8 8 0 1 0 18.5 16"/><path d="M20 5v6h-6"/></svg> Refresh</button>
     </div>
     ${recent.length===0 ? `<div class="empty">Nothing logged yet. Tap a button above to start.</div>` :
       recent.map(entryRow).join('')}
