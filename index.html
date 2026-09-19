@@ -49,6 +49,11 @@
     background:linear-gradient(135deg, #2b2b2b 0%, #050505 100%);
     z-index:-1;
     pointer-events:none;
+    transform:translate3d(0,0,0);
+    -webkit-transform:translate3d(0,0,0);
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+    will-change:transform;
   }
   #app{
     max-width:480px;
@@ -124,7 +129,7 @@
   .actionbtn{
     flex:1;
     border:none;
-    border-radius:40px;
+    border-radius:var(--radius);
     padding:22px 10px 18px 10px;
     display:flex;
     flex-direction:column;
@@ -165,7 +170,7 @@
     content:'';
     position:absolute;
     inset:2px;
-    border-radius:38px;
+    border-radius:calc(var(--radius) - 2px);
     background:linear-gradient(135deg, var(--milk), #c99347);
     z-index:1;
   }
