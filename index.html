@@ -102,6 +102,7 @@
   }
   .statuscard{
     flex:1;
+    text-align:center;
   }
   .statuscard .n{ font-size:22px; font-weight:400; line-height:1.15; font-variant-numeric:tabular-nums; letter-spacing:-0.01em; color:var(--text); }
   .statuscard .l{ font-size:12px; color:var(--text-dim); margin-top:4px; line-height:1.3; }
@@ -175,17 +176,17 @@
   /* tabs for summary period */
   .periodtabs{
     display:flex;
-    background:var(--surface);
+    background:var(--milk);
     border-radius:999px;
     padding:4px;
     margin:12px 0 32px 0;
-    border:1px solid var(--line);
+    border:none;
   }
   .periodtabs button{
     flex:1;
     border:none;
     background:transparent;
-    color:var(--text-dim);
+    color:rgba(36,29,10,0.55);
     font-family:inherit;
     font-size:13.5px;
     font-weight:600;
@@ -193,7 +194,7 @@
     border-radius:999px;
     cursor:pointer;
   }
-  .periodtabs button.active{ background:var(--surface-2); color:var(--text); }
+  .periodtabs button.active{ background:#241d0a; color:var(--milk); }
 
   .statgrid{
     display:grid;
@@ -415,7 +416,7 @@
   .about-photo{
     position:absolute;
     bottom:0;
-    left:-24px;
+    left:-46px;
     width:320px;
     height:auto;
     transform:rotate(-6deg);
@@ -427,8 +428,8 @@
   .about-text{
     position:absolute;
     top:4px;
+    left:0;
     right:0;
-    width:150px;
     text-align:center;
     z-index:1;
   }
@@ -445,11 +446,12 @@
     60%{ transform:scale(1); }
   }
   .lovetitle{
-    font-size:16px;
-    font-weight:300;
+    font-size:23px;
+    font-weight:500;
+    font-style:italic;
     letter-spacing:-0.005em;
-    margin-top:10px;
-    line-height:1.45;
+    margin-top:12px;
+    line-height:1.4;
   }
   textarea, .urlinput{
     width:100%; padding:12px 14px; border-radius:var(--radius-sm);
@@ -869,7 +871,7 @@ function renderHome(){
       <div class="statuscard"><div class="n">${feedsToday.length}</div><div class="l">Feeds in 24h</div></div>
       <div class="statuscard"><div class="n">${mlToday}</div><div class="l">ml in 24h</div></div>
     </div>
-    <div class="sectiontitle" style="margin-top:44px; border-bottom:none; padding-bottom:0; display:flex; align-items:center; gap:8px;">
+    <div class="sectiontitle" style="margin-top:44px; margin-bottom:2px; border-bottom:none; padding-bottom:0; display:flex; align-items:center; gap:8px;">
       <span>Recent activity</span>
       <button class="iconbtn" id="refresh-home" aria-label="Refresh"><svg class="${state.backgroundRefreshing ? 'spinning' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18.5 16"/><path d="M20 5v6h-6"/></svg></button>
     </div>
@@ -948,8 +950,8 @@ function renderTrends(){
     <div class="sectiontitle" style="margin-top:0;">${dot('var(--milk)')}Feeding — ${periodLabel(state.period)}</div>
     <div class="statgrid">
       <div class="statbig"><div class="v">${feeds.length}</div><div class="k">bottles</div></div>
-      <div class="statbig"><div class="v">${Math.round(totalMl)}</div><div class="k">total mL</div></div>
-      <div class="statbig"><div class="v">${Math.round(avgMl)}</div><div class="k">avg mL / bottle</div></div>
+      <div class="statbig"><div class="v">${Math.round(totalMl)}</div><div class="k">total ml</div></div>
+      <div class="statbig"><div class="v">${Math.round(avgMl)}</div><div class="k">avg ml / bottle</div></div>
       <div class="statbig"><div class="v">${avgIntervalStr}</div><div class="k">avg time between</div></div>
     </div>
     <div class="sectiontitle">${dot('var(--diaper)')}Diapers — ${periodLabel(state.period)}</div>
@@ -961,7 +963,7 @@ function renderTrends(){
     </div>
     <div class="sectiontitle">${dot('var(--wet)')}Daily trends</div>
     <div class="chartcard">
-      <h3>Bottles per day (mL)</h3>
+      <h3>Bottles per day (ml)</h3>
       <div class="chartwrap"><canvas id="feedChart"></canvas></div>
     </div>
     <div class="chartcard">
@@ -1073,7 +1075,7 @@ function drawCharts(){
 
   feedChartInstance = new Chart(feedCanvas, {
     type:'line',
-    data:{ labels, datasets:[{ label:'mL', data: ozByDay, borderColor:'#F2C879', backgroundColor:'rgba(242,200,121,0.15)', fill:true, tension:0.35, pointRadius:3 }]},
+    data:{ labels, datasets:[{ label:'ml', data: ozByDay, borderColor:'#F2C879', backgroundColor:'rgba(242,200,121,0.15)', fill:true, tension:0.35, pointRadius:3 }]},
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ display:false } },
@@ -1173,7 +1175,7 @@ function renderAbout(){
           <img class="about-photo" src="baby-photo.png" alt="">
           <div class="about-text">
             <div class="loveheart">❤️</div>
-            <div class="lovetitle">Made with love,<br>for our little Kunju Money</div>
+            <div class="lovetitle">Made with Love<br>for our little Kunju Money</div>
           </div>
         </div>
       </div>
@@ -1297,7 +1299,7 @@ function renderFeedModal(){
     <div class="modal">
       <h2>${editing ? 'Edit bottle' : 'Log bottle'}</h2>
       <div class="field">
-        <label>Amount (mL)</label>
+        <label>Amount (ml)</label>
         <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="bottle-amount-mL" id="feed-amt-input" class="amtinput" value="${amtDisplay}" placeholder="0">
         <div class="presetrow">
           ${presets.map(p=>`<button type="button" class="presetchip" data-preset="${p}">${p}</button>`).join('')}
