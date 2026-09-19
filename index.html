@@ -733,17 +733,15 @@ function render(){
 
   let body = '';
   if(state.tab==='home') body = renderHome();
-  else if(state.tab==='summary') body = renderSummary();
   else if(state.tab==='trends') body = renderTrends();
-  else if(state.tab==='settings') body = renderSettings();
+  else if(state.tab==='about') body = renderAbout();
 
   app.innerHTML = `
     <div class="screen">${body}</div>
     <div class="tabbar">
       ${tabBtn('home','home','Home')}
-      ${tabBtn('summary','summary','Summary')}
       ${tabBtn('trends','trends','Trends')}
-      ${tabBtn('settings','settings','Settings')}
+      ${tabBtn('about','about','About')}
     </div>
     ${state.modal==='feed' ? renderFeedModal() : ''}
     ${state.modal==='diaper' ? renderDiaperModal() : ''}
@@ -769,9 +767,8 @@ function render(){
 }
 const TAB_ICONS = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h4v-6h2v6h4a1 1 0 0 0 1-1v-9"/></svg>`,
-  summary: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.2"/><path d="M8.5 9h7M8.5 13h7M8.5 17h4"/></svg>`,
   trends: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16l5.5-5.5 4 4L20 7"/><path d="M15 7h5v5"/></svg>`,
-  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2.1" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2.1" fill="currentColor" stroke="none"/><circle cx="9" cy="17" r="2.1" fill="currentColor" stroke="none"/></svg>`
+  about: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-7.5-10.3C4.5 7 6.6 5 9.2 5c1.4 0 2.6.7 3.3 1.8C13.2 5.7 14.4 5 15.8 5c2.6 0 4.7 2 4.7 5.2 0 5.7-7.5 10.3-7.5 10.3z"/></svg>`
 };
 function tabBtn(id, iconKey, label){
   return `<button class="tabbtn ${state.tab===id?'active':''}" data-tab="${id}">
@@ -851,7 +848,12 @@ function bannerLoading(){
 /* ---------------- summary ---------------- */
 function periodLabel(p){ return p===24 ? 'Last 24 hours' : p===168 ? 'Last week' : 'Last month'; }
 
-function renderSummary(){
+/* ---------------- trends (summary stats + charts + growth, merged) ---------------- */
+let feedChartInstance = null, diaperChartInstance = null;
+
+function daysForPeriod(p){ return p===24 ? 2 : p===168 ? 7 : 30; }
+
+function renderTrends(){
   const feeds = state.feedings.filter(f=>withinHours(f.ts, state.period));
   const diapers = state.diapers.filter(d=>withinHours(d.ts, state.period));
   const totalMl = feeds.reduce((s,f)=>s+toMl(f.amount,f.unit),0);
@@ -891,22 +893,6 @@ function renderSummary(){
       <div class="statbig"><div class="v">${wet}</div><div class="k" style="color:var(--wet)">wet</div></div>
       <div class="statbig"><div class="v">${dirty}</div><div class="k" style="color:var(--dirty)">dirty</div></div>
       <div class="statbig"><div class="v">${both}</div><div class="k" style="color:var(--both)">both</div></div>
-    </div>
-  `;
-}
-
-/* ---------------- trends ---------------- */
-let feedChartInstance = null, diaperChartInstance = null;
-
-function daysForPeriod(p){ return p===24 ? 2 : p===168 ? 7 : 30; }
-
-function renderTrends(){
-  return `
-    ${state.loadError ? bannerErr() : ''}
-    <div class="periodtabs">
-      <button class="${state.period===24?'active':''}" data-period="24">24h</button>
-      <button class="${state.period===168?'active':''}" data-period="168">Week</button>
-      <button class="${state.period===720?'active':''}" data-period="720">Month</button>
     </div>
     <div class="chartcard">
       <h3>Bottles per day (mL)</h3>
@@ -1113,7 +1099,7 @@ function drawWeightChart(canvasId, expanded){
 }
 
 /* ---------------- settings ---------------- */
-function renderSettings(){
+function renderAbout(){
   return `
     <div class="lovecard">
       <div class="loveheart">❤️</div>
