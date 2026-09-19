@@ -43,21 +43,13 @@
     max-width:480px;
     margin:0 auto;
     min-height:100vh;
+    min-height:100dvh;
     display:flex;
     flex-direction:column;
     padding-bottom:calc(78px + env(safe-area-inset-bottom));
     position:relative;
   }
-  .topbar{
-    padding:26px 20px 4px 20px;
-  }
-  .topbar h1{
-    font-size:21px;
-    font-weight:800;
-    margin:0;
-    letter-spacing:-0.02em;
-  }
-  .screen{ padding:0 20px 20px 20px; flex:1; }
+  .screen{ padding:calc(20px + env(safe-area-inset-top)) 20px 20px 20px; flex:1; }
   .hide{display:none !important;}
 
   /* hero stat — the single most prominent number on the home screen */
@@ -204,6 +196,8 @@
   }
   .chartcard h3{ font-size:13.5px; margin:0 0 10px 0; color:var(--text-dim); font-weight:600; }
   .chartwrap{ position:relative; height:180px; }
+  .chartwrap.tappable{ cursor:pointer; }
+  .detailmodal{ max-height:96dvh; }
 
   .legend{ display:flex; gap:14px; margin-top:10px; flex-wrap:wrap; }
   .legend span{ font-size:11.5px; color:var(--text-dim); display:flex; align-items:center; gap:5px; }
@@ -242,7 +236,9 @@
 
   /* modal */
   .modalbg{
-    position:fixed; inset:0;
+    position:fixed;
+    top:0; left:0; right:0;
+    height:100dvh;
     background:rgba(10,10,15,0.6);
     display:flex; align-items:flex-end;
     z-index:50;
@@ -256,12 +252,13 @@
     max-width:480px;
     margin:0 auto;
     border-radius:24px 24px 0 0;
-    padding:22px 20px calc(26px + env(safe-area-inset-bottom)) 20px;
+    padding:22px 20px calc(20px + env(safe-area-inset-bottom)) 20px;
     border:1px solid var(--line);
     border-bottom:none;
     animation:slideUp 0.22s cubic-bezier(.32,.72,.35,1);
-    max-height:88vh;
+    max-height:92dvh;
     overflow-y:auto;
+    overscroll-behavior:contain;
   }
   .modal h2{ font-size:19px; margin:0 0 20px 0; letter-spacing:-0.01em; }
   .field{ margin-bottom:18px; }
@@ -484,6 +481,8 @@ async function fetchAll(){
   }
   state.loading = false;
   render();
+  if(state.tab==='trends' && !state.modal) setTimeout(drawCharts, 30);
+  if(state.modal==='weightDetail') setTimeout(()=>drawWeightChart('weightChartExpanded', true), 30);
 }
 function normalizeFeed(row){
   const ts = new Date(row.Timestamp);
@@ -623,9 +622,6 @@ function render(){
   else if(state.tab==='settings') body = renderSettings();
 
   app.innerHTML = `
-    <div class="topbar">
-      <h1>Kunju Money</h1>
-    </div>
     <div class="screen">${body}</div>
     <div class="tabbar">
       ${tabBtn('home','◐','Home')}
@@ -636,6 +632,7 @@ function render(){
     ${state.modal==='feed' ? renderFeedModal() : ''}
     ${state.modal==='diaper' ? renderDiaperModal() : ''}
     ${state.modal==='weight' ? renderWeightModal() : ''}
+    ${state.modal==='weightDetail' ? renderWeightDetailModal() : ''}
   `;
   attachHandlers();
   if(state.modal==='feed'){
@@ -645,6 +642,9 @@ function render(){
   if(state.modal==='weight'){
     const wEl = document.getElementById('weight-amt-input');
     if(wEl){ wEl.focus(); wEl.select(); }
+  }
+  if(state.modal==='weightDetail'){
+    setTimeout(()=>drawWeightChart('weightChartExpanded', true), 30);
   }
 }
 function tabBtn(id, icon, label){
@@ -815,7 +815,8 @@ function renderGrowthSection(){
         <h3 style="margin:0;">Vs. WHO reference (girls)</h3>
         <button class="btn primary" id="open-weight" style="flex:none; padding:9px 16px; font-size:13px;">+ Log weight</button>
       </div>
-      <div class="chartwrap" style="height:220px;"><canvas id="weightChart"></canvas></div>
+      <div class="chartwrap tappable" style="height:220px;" id="open-weight-detail"><canvas id="weightChart"></canvas></div>
+      <div style="text-align:center; font-size:11.5px; color:var(--text-dim); margin-top:8px;">Tap the chart to explore it in detail ⤢</div>
       <div class="legend">
         <span><i style="background:#4b4d63"></i>3rd–97th pctile band</span>
         <span><i style="background:var(--milk)"></i>her weight</span>
@@ -835,6 +836,36 @@ function renderGrowthSection(){
       `).join('')}
     </div>` : ''}
   `;
+}
+
+function renderWeightDetailModal(){
+  const latest = state.weights[0];
+  let percentileLine = 'No weigh-ins logged yet.';
+  if(latest){
+    const months = ageInMonths(latest.ts);
+    const pct = estimatePercentile(latest.weightKg, months);
+    percentileLine = `Most recent: ${latest.weightKg.toFixed(2)} kg at ${months.toFixed(1)} months — approximately the <strong>${pct}</strong> percentile`;
+  }
+  return `
+  <div class="modalbg" id="modal-bg-weightdetail">
+    <div class="modal detailmodal">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <h2 style="margin:0;">Weight for age</h2>
+        <button class="btn ghost" id="weightdetail-close" style="flex:none; padding:9px 16px; font-size:13px;">Close</button>
+      </div>
+      <div class="chartwrap" style="height:min(52dvh, 420px);"><canvas id="weightChartExpanded"></canvas></div>
+      <div class="legend" style="margin-top:14px;">
+        <span><i style="background:#4b4d63"></i>3rd pctile</span>
+        <span><i style="background:#5c5e78"></i>15th</span>
+        <span><i style="background:#7d7fa0"></i>50th (median)</span>
+        <span><i style="background:#5c5e78"></i>85th</span>
+        <span><i style="background:#4b4d63"></i>97th</span>
+        <span><i style="background:var(--milk)"></i>her weight</span>
+      </div>
+      <p style="font-size:13px; color:var(--text-dim); margin:14px 0 0 0; line-height:1.5;">${percentileLine}</p>
+      <p style="font-size:11.5px; color:var(--text-dim); margin:10px 0 0 0; line-height:1.5;">Tap or drag along the chart to see exact values at any age. Reference curves are approximate WHO growth standard percentiles for girls — for general awareness only, not a diagnosis.</p>
+    </div>
+  </div>`;
 }
 
 function drawCharts(){
@@ -892,17 +923,13 @@ function drawCharts(){
     }
   });
 
-  drawWeightChart();
+  drawWeightChart('weightChart', false);
 }
 
-let weightChartInstance = null;
-function drawWeightChart(){
-  const canvas = document.getElementById('weightChart');
-  if(!canvas || typeof Chart === 'undefined') return;
-  if(weightChartInstance) weightChartInstance.destroy();
+const weightChartInstances = {};
+const PCTILE_NAMES = {p3:'3rd percentile', p15:'15th percentile', p50:'50th percentile (median)', p85:'85th percentile', p97:'97th percentile', 'her weight':'Her weight'};
 
-  const gridColor = 'rgba(255,255,255,0.06)';
-  const tickColor = '#9C9DB2';
+function weightChartDatasets(){
   const refLine = (key,color)=>({
     label:key, data: WHO_WFA_GIRLS.map(r=>({x:r.m, y:r[key]})),
     borderColor:color, borderWidth: key==='p50' ? 1.5 : 1,
@@ -910,20 +937,50 @@ function drawWeightChart(){
     pointRadius:0, fill:false, tension:0.3
   });
   const herData = [...state.weights].sort((a,b)=>a.ts-b.ts).map(w=>({x: ageInMonths(w.ts), y: w.weightKg}));
+  return [
+    refLine('p3','#4b4d63'), refLine('p15','#5c5e78'), refLine('p50','#7d7fa0'),
+    refLine('p85','#5c5e78'), refLine('p97','#4b4d63'),
+    { label:'her weight', data:herData, borderColor:'#F2C879', backgroundColor:'#F2C879', borderWidth:2.5, pointRadius:5, pointHoverRadius:7, pointBackgroundColor:'#F2C879', fill:false, tension:0.2 }
+  ];
+}
 
-  weightChartInstance = new Chart(canvas, {
+function drawWeightChart(canvasId, expanded){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || typeof Chart === 'undefined') return;
+  if(weightChartInstances[canvasId]) weightChartInstances[canvasId].destroy();
+
+  const gridColor = 'rgba(255,255,255,0.06)';
+  const tickColor = '#9C9DB2';
+
+  weightChartInstances[canvasId] = new Chart(canvas, {
     type:'line',
-    data:{ datasets:[
-      refLine('p3','#4b4d63'), refLine('p15','#5c5e78'), refLine('p50','#7d7fa0'),
-      refLine('p85','#5c5e78'), refLine('p97','#4b4d63'),
-      { label:'her weight', data:herData, borderColor:'#F2C879', backgroundColor:'#F2C879', borderWidth:2.5, pointRadius:4, pointBackgroundColor:'#F2C879', fill:false, tension:0.2 }
-    ]},
+    data:{ datasets: weightChartDatasets() },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ display:false } },
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          mode:'index', intersect:false,
+          titleFont:{size:12}, bodyFont:{size:12},
+          callbacks:{
+            title:(items)=> items.length ? `${items[0].parsed.x.toFixed(1)} months` : '',
+            label:(item)=> `${PCTILE_NAMES[item.dataset.label] || item.dataset.label}: ${item.parsed.y.toFixed(2)} kg`
+          }
+        }
+      },
       scales:{
-        x:{ type:'linear', min:0, max:24, title:{display:true, text:'Age (months)', color:tickColor, font:{size:11}}, grid:{ color:gridColor }, ticks:{ color:tickColor, font:{size:10.5}, stepSize:6 } },
-        y:{ grid:{ color:gridColor }, ticks:{ color:tickColor, font:{size:10.5} }, title:{display:true, text:'kg', color:tickColor, font:{size:11}} }
+        x:{
+          type:'linear', min:0, max:24,
+          title:{display:true, text:'Age (months)', color:tickColor, font:{size:11}},
+          grid:{ color:gridColor },
+          ticks:{ color:tickColor, font:{size:10.5}, stepSize: expanded ? 3 : 6 }
+        },
+        y:{
+          grid:{ color:gridColor },
+          ticks:{ color:tickColor, font:{size:10.5} },
+          title:{display:true, text:'kg', color:tickColor, font:{size:11}}
+        }
       }
     }
   });
@@ -1189,6 +1246,10 @@ function attachHandlers(){
   /* weight modal */
   const openWeightBtn = document.getElementById('open-weight');
   if(openWeightBtn) openWeightBtn.onclick = openAddWeight;
+  const openWeightDetail = document.getElementById('open-weight-detail');
+  if(openWeightDetail) openWeightDetail.onclick = ()=>{ state.modal = 'weightDetail'; render(); };
+  const weightDetailClose = document.getElementById('weightdetail-close');
+  if(weightDetailClose) weightDetailClose.onclick = ()=>{ state.modal = null; render(); if(state.tab==='trends') setTimeout(drawCharts, 30); };
   const weightAmtInput = document.getElementById('weight-amt-input');
   if(weightAmtInput) weightAmtInput.oninput = ()=>{ weightAmount = Number(weightAmtInput.value) || 0; };
   document.querySelectorAll('#weight-unit-toggle button').forEach(b=>{
@@ -1236,11 +1297,29 @@ function attachHandlers(){
   });
 }
 
+/* ---------------- keyboard-safe modal positioning ----------------
+   position:fixed elements are sized against the layout viewport, which
+   iOS Safari does NOT shrink when the keyboard opens — only the visual
+   viewport shrinks. 100dvh handles most of this on modern iOS, but this
+   keeps the modal correctly pinned above the keyboard as a fallback. */
+function setupViewportGuard(){
+  if(!window.visualViewport) return;
+  const sync = ()=>{
+    const bg = document.querySelector('.modalbg');
+    if(!bg) return;
+    bg.style.height = window.visualViewport.height + 'px';
+    bg.style.top = window.visualViewport.offsetTop + 'px';
+  };
+  window.visualViewport.addEventListener('resize', sync);
+  window.visualViewport.addEventListener('scroll', sync);
+}
+
 /* ---------------- boot ---------------- */
 (async function boot(){
   await loadConfig();
   render();
   if(state.config) fetchAll();
+  setupViewportGuard();
   setInterval(()=>{ if(state.tab==='home') render(); }, 60000);
 })();
 </script>
