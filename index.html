@@ -1427,9 +1427,8 @@ function attachHandlers(){
   if(feedPickerToggle) feedPickerToggle.onclick = ()=>{ feedPickerOpen = true; render(); };
   document.querySelectorAll('.presetchip').forEach(b=>{
     b.onclick = ()=>{
-      if(feedPickerOpen) feedTimeValue = readWheelPicker('feed');
       feedAmount = Number(b.dataset.preset);
-      render();
+      if(feedAmtInput) feedAmtInput.value = feedAmount;
     };
   });
   const feedCancel = document.getElementById('feed-cancel');
