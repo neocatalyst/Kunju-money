@@ -404,35 +404,6 @@
   .settingsblock h3{ font-size:14px; margin:0 0 14px 0; }
   .settingsblock .help{ font-size:12px; color:var(--text-dim); margin-top:8px; line-height:1.5; }
 
-  .lovecard{
-    padding:8px 16px 10px 16px;
-    text-align:center;
-  }
-  .loveheart{
-    font-size:30px;
-    line-height:1;
-    animation:heartbeat 2.4s ease-in-out infinite;
-  }
-  @keyframes heartbeat{
-    0%, 100%{ transform:scale(1); }
-    15%{ transform:scale(1.12); }
-    30%{ transform:scale(1); }
-    45%{ transform:scale(1.08); }
-    60%{ transform:scale(1); }
-  }
-  .lovetitle{
-    font-size:22px;
-    font-weight:300;
-    letter-spacing:-0.005em;
-    margin-top:12px;
-    line-height:1.4;
-  }
-  .lovesticker{
-    width:330px;
-    height:auto;
-    display:block;
-    margin:32px auto 0 auto;
-  }
   textarea, .urlinput{
     width:100%; padding:12px 14px; border-radius:var(--radius-sm);
     border:1px solid var(--line); background:var(--surface-2); color:var(--text);
@@ -778,14 +749,12 @@ function render(){
   let body = '';
   if(state.tab==='home') body = renderHome();
   else if(state.tab==='trends') body = renderTrends();
-  else if(state.tab==='about') body = renderAbout();
 
   app.innerHTML = `
     <div class="screen">${body}</div>
     <div class="tabbar">
       ${tabBtn('home','home','Home')}
       ${tabBtn('trends','trends','Trends')}
-      ${tabBtn('about','about','About')}
     </div>
     ${state.modal==='feed' ? renderFeedModal() : ''}
     ${state.modal==='diaper' ? renderDiaperModal() : ''}
@@ -805,8 +774,7 @@ function render(){
 }
 const TAB_ICONS = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h4v-6h2v6h4a1 1 0 0 0 1-1v-9"/></svg>`,
-  trends: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16l5.5-5.5 4 4L20 7"/><path d="M15 7h5v5"/></svg>`,
-  about: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-7.5-10.3C4.5 7 6.6 5 9.2 5c1.4 0 2.6.7 3.3 1.8C13.2 5.7 14.4 5 15.8 5c2.6 0 4.7 2 4.7 5.2 0 5.7-7.5 10.3-7.5 10.3z"/></svg>`
+  trends: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16l5.5-5.5 4 4L20 7"/><path d="M15 7h5v5"/></svg>`
 };
 function tabBtn(id, iconKey, label){
   return `<button class="tabbtn ${state.tab===id?'active':''}" data-tab="${id}" aria-label="${label}">
@@ -1141,19 +1109,6 @@ function drawWeightChart(canvasId, expanded){
       }
     }
   });
-}
-
-/* ---------------- settings ---------------- */
-function renderAbout(){
-  return `
-    <div style="padding-top:132px;">
-      <div class="lovecard">
-        <div class="loveheart">❤️</div>
-        <div class="lovetitle">Made with Love<br>for our little Kunju Money</div>
-        <img class="lovesticker" src="baby-photo-2.png?v=2" alt="">
-      </div>
-    </div>
-  `;
 }
 
 /* ---------------- modals ---------------- */
