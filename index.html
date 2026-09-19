@@ -30,25 +30,33 @@
     --radius-sm: 12px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; touch-action:manipulation;}
-  html,body{height:100%;}
+  html,body{
+    height:100%;
+    position:fixed;
+    inset:0;
+    overflow:hidden;
+    overscroll-behavior:none;
+  }
   body{
     margin:0;
     background:var(--bg);
     color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
-    overflow-x:hidden;
     line-height:1.45;
     -webkit-font-smoothing:antialiased;
   }
   #app{
     max-width:480px;
     margin:0 auto;
-    min-height:100vh;
-    min-height:100dvh;
+    height:100dvh;
+    height:var(--app-height, 100dvh);
     display:flex;
     flex-direction:column;
     padding-bottom:calc(78px + env(safe-area-inset-bottom));
     position:relative;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
   }
   .screen{ padding:calc(20px + env(safe-area-inset-top)) 20px 20px 20px; flex:1; }
   .hide{display:none !important;}
@@ -264,7 +272,6 @@
   .modal h2{ font-size:19px; margin:0 0 20px 0; letter-spacing:-0.01em; }
   .field{ margin-bottom:18px; }
   .field label{ font-size:12.5px; color:var(--text-dim); display:block; margin-bottom:8px; font-weight:600; }
-  .fieldhint{ font-weight:400; color:var(--text-dim); opacity:0.8; }
   .amtrow{ display:flex; align-items:center; gap:12px; }
   .amtbtn{
     width:42px; height:42px; border-radius:50%;
@@ -703,7 +710,7 @@ function entryRow(e){
     return `<div class="${cls}" ${clickAttr}>
       <div class="dot feed"></div>
       <div class="main">
-        <div class="title">${e.amount} ${e.unit} bottle</div>
+        <div class="title">${e.amount} mL bottle</div>
       </div>
       <div class="time">${fmtDay(e.ts)}<br>${fmtTime(e.ts)}</div>
       ${editable ? `<div class="chev">›</div>` : ''}
@@ -815,13 +822,13 @@ function renderGrowthSection(){
     <div class="sectiontitle">Growth — weight for age</div>
     <div class="chartcard">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-        <h3 style="margin:0;">Vs. WHO reference (girls)</h3>
+        <h3 style="margin:0;">WHO reference (girls)</h3>
         <button class="btn primary" id="open-weight" style="flex:none; padding:9px 16px; font-size:13px;">+ Log weight</button>
       </div>
       <div class="chartwrap tappable" style="height:220px;" id="open-weight-detail"><canvas id="weightChart"></canvas></div>
       <div style="text-align:center; font-size:11.5px; color:var(--text-dim); margin-top:8px;">Tap the chart to explore it in detail ⤢</div>
       <div class="legend">
-        <span><i style="background:#4b4d63"></i>3rd–97th pctile band</span>
+        <span><i style="background:#4b4d63"></i>3rd–97th percentile</span>
         <span><i style="background:var(--milk)"></i>her weight</span>
       </div>
       <p style="font-size:13px; color:var(--text-dim); margin:14px 0 0 0; line-height:1.5;">${percentileLine}</p>
@@ -858,7 +865,7 @@ function renderWeightDetailModal(){
       </div>
       <div class="chartwrap" style="height:min(52dvh, 420px);"><canvas id="weightChartExpanded"></canvas></div>
       <div class="legend" style="margin-top:14px;">
-        <span><i style="background:#4b4d63"></i>3rd pctile</span>
+        <span><i style="background:#4b4d63"></i>3rd percentile</span>
         <span><i style="background:#5c5e78"></i>15th</span>
         <span><i style="background:#7d7fa0"></i>50th (median)</span>
         <span><i style="background:#5c5e78"></i>85th</span>
@@ -998,21 +1005,15 @@ function renderSettings(){
 }
 
 /* ---------------- modals ---------------- */
-function timeStrFromDate(d){
-  const hh = String(d.getHours()).padStart(2,'0');
-  const mm = String(d.getMinutes()).padStart(2,'0');
-  return `${hh}:${mm}`;
+function localInputValue(d){
+  const c = new Date(d);
+  c.setMinutes(c.getMinutes() - c.getTimezoneOffset());
+  return c.toISOString().slice(0,16);
 }
-function combineDateTime(baseDate, timeStr){
-  const [h,m] = (timeStr||'00:00').split(':').map(Number);
-  const d = new Date(baseDate);
-  d.setHours(h||0, m||0, 0, 0);
-  return d;
-}
+function nowLocalInputValue(){ return localInputValue(new Date()); }
 
 let feedAmount = 0;
-let feedBaseDate = null;
-let feedTimeStr = null;
+let feedTimeValue = null;
 
 function renderFeedModal(){
   const editing = !!state.editingId;
@@ -1030,8 +1031,8 @@ function renderFeedModal(){
         </div>
       </div>
       <div class="field">
-        <label>Time <span class="fieldhint">— ${fmtDay(feedBaseDate)}</span></label>
-        <input type="time" id="feed-time" value="${feedTimeStr}">
+        <label>Date &amp; time</label>
+        <input type="datetime-local" id="feed-time" value="${feedTimeValue}">
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="feed-cancel">Cancel</button>
@@ -1043,8 +1044,7 @@ function renderFeedModal(){
 }
 
 let diaperType = 'wet';
-let diaperBaseDate = null;
-let diaperTimeStr = null;
+let diaperTimeValue = null;
 
 function renderDiaperModal(){
   const editing = !!state.editingId;
@@ -1061,8 +1061,8 @@ function renderDiaperModal(){
         </div>
       </div>
       <div class="field">
-        <label>Time <span class="fieldhint">— ${fmtDay(diaperBaseDate)}</span></label>
-        <input type="time" id="diaper-time" value="${diaperTimeStr}">
+        <label>Date &amp; time</label>
+        <input type="datetime-local" id="diaper-time" value="${diaperTimeValue}">
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="diaper-cancel">Cancel</button>
@@ -1075,26 +1075,26 @@ function renderDiaperModal(){
 
 function openAddFeed(){
   state.editingId = null; feedAmount = 0;
-  feedBaseDate = new Date(); feedTimeStr = timeStrFromDate(feedBaseDate);
+  feedTimeValue = nowLocalInputValue();
   state.modal = 'feed'; render();
 }
 function openEditFeed(id){
   const entry = state.feedings.find(f=>f.id===id);
   if(!entry) return;
   state.editingId = id; feedAmount = entry.amount;
-  feedBaseDate = entry.ts; feedTimeStr = timeStrFromDate(entry.ts);
+  feedTimeValue = localInputValue(entry.ts);
   state.modal = 'feed'; render();
 }
 function openAddDiaper(){
   state.editingId = null; diaperType = 'wet';
-  diaperBaseDate = new Date(); diaperTimeStr = timeStrFromDate(diaperBaseDate);
+  diaperTimeValue = nowLocalInputValue();
   state.modal = 'diaper'; render();
 }
 function openEditDiaper(id){
   const entry = state.diapers.find(d=>d.id===id);
   if(!entry) return;
   state.editingId = id; diaperType = entry.type;
-  diaperBaseDate = entry.ts; diaperTimeStr = timeStrFromDate(entry.ts);
+  diaperTimeValue = localInputValue(entry.ts);
   state.modal = 'diaper'; render();
 }
 
@@ -1174,7 +1174,7 @@ function attachHandlers(){
   document.querySelectorAll('.presetchip').forEach(b=>{
     b.onclick = ()=>{
       const timeEl = document.getElementById('feed-time');
-      if(timeEl) feedTimeStr = timeEl.value;
+      if(timeEl) feedTimeValue = timeEl.value;
       feedAmount = Number(b.dataset.preset);
       render();
     };
@@ -1184,7 +1184,7 @@ function attachHandlers(){
   const feedSave = document.getElementById('feed-save');
   if(feedSave) feedSave.onclick = async ()=>{
     const t = document.getElementById('feed-time').value;
-    const dateObj = combineDateTime(feedBaseDate, t);
+    const dateObj = t ? new Date(t) : new Date();
     const amt = Number(document.getElementById('feed-amt-input').value) || 0;
     if(state.editingId){
       await updateFeed(state.editingId, amt, 'ml', dateObj);
@@ -1207,7 +1207,7 @@ function attachHandlers(){
   const diaperSave = document.getElementById('diaper-save');
   if(diaperSave) diaperSave.onclick = async ()=>{
     const t = document.getElementById('diaper-time').value;
-    const dateObj = combineDateTime(diaperBaseDate, t);
+    const dateObj = t ? new Date(t) : new Date();
     if(state.editingId){
       await updateDiaper(state.editingId, diaperType, dateObj);
     }else{
@@ -1288,12 +1288,24 @@ function setupViewportGuard(){
   window.visualViewport.addEventListener('scroll', sync);
 }
 
+/* ---------------- exact app height (fixes the bottom tab bar drifting
+   away from the screen edge in iOS "Add to Home Screen" standalone mode).
+   dvh mostly handles this, but measuring window.innerHeight directly is
+   more reliable across iOS versions in standalone display-mode. */
+function setupAppHeight(){
+  const set = ()=> document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+  set();
+  window.addEventListener('resize', set);
+  window.addEventListener('orientationchange', ()=> setTimeout(set, 50));
+}
+
 /* ---------------- boot ---------------- */
 (async function boot(){
   await loadConfig();
   render();
   if(state.config) fetchAll();
   setupViewportGuard();
+  setupAppHeight();
   setInterval(()=>{ if(state.tab==='home') render(); }, 60000);
 })();
 </script>
