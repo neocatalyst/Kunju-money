@@ -160,7 +160,7 @@
     display:flex;
     align-items:center;
     gap:12px;
-    padding:8px 4px;
+    padding:12px 4px;
   }
   .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
   .dot.feed{ background:var(--milk); }
@@ -883,8 +883,11 @@ function entryRow(e){
   const clickAttr = editable ? `data-edit="${e.kind}" data-id="${escapeAttr(e.id)}"` : '';
   const cls = editable ? 'entry editable' : 'entry';
   if(e.kind==='feed'){
+    // Dot scales with bottle size: 150ml+ is treated as the practical max,
+    // capped so it never grows past the label text's own font size (14.5px).
+    const feedDotSize = Math.round(6 + Math.min(e.amount||0,150)/150 * 8);
     return `<div class="${cls}" ${clickAttr}>
-      <div class="dot feed"></div>
+      <div class="dot feed" style="width:${feedDotSize}px; height:${feedDotSize}px;"></div>
       <div class="main">
         <div class="title">${e.amount ? e.amount+' ml bottle' : 'Bottle — amount not set'}</div>
       </div>
@@ -893,8 +896,11 @@ function entryRow(e){
     </div>`;
   }
   const diaperLabel = e.type==='both' ? 'Wet & dirty diaper' : e.type.charAt(0).toUpperCase()+e.type.slice(1)+' diaper';
+  // Wet is the lightest/smallest, dirty is bigger, both (having a dirty
+  // component too) biggest of the three — same 14.5px ceiling as feed dots.
+  const diaperDotSize = e.type==='wet' ? 7 : e.type==='dirty' ? 11 : 13;
   return `<div class="${cls}" ${clickAttr}>
-    <div class="dot diaper"></div>
+    <div class="dot diaper" style="width:${diaperDotSize}px; height:${diaperDotSize}px;"></div>
     <div class="main">
       <div class="title">${diaperLabel}</div>
     </div>
