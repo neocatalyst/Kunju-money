@@ -69,6 +69,8 @@
     pointer-events:none;
     user-select:none;
     z-index:0;
+    -webkit-mask-image:linear-gradient(315deg, black 30%, transparent 80%);
+    mask-image:linear-gradient(315deg, black 30%, transparent 80%);
   }
   .hero-text{
     position:relative;
@@ -790,6 +792,16 @@ function renderHome(){
   const feedsToday = state.feedings.filter(f=>withinHours(f.ts,24));
   const mlToday = Math.round(feedsToday.reduce((s,f)=>s+toMl(f.amount,f.unit),0));
 
+  // Pick which baby photo to show based on how long it's been since the
+  // last feed. No last feed at all defaults to baby1 (freshly-fed look).
+  let heroPhoto = "baby1.png";
+  if (lastFeed) {
+    const hoursSince = (Date.now() - lastFeed.ts) / 3600000;
+    if (hoursSince < 1) heroPhoto = "baby1.png";
+    else if (hoursSince < 2.5) heroPhoto = "baby2.png";
+    else heroPhoto = "baby3.png";
+  }
+
   const allActivity = [...state.feedings.map(f=>({...f,kind:'feed'})), ...state.diapers.map(d=>({...d,kind:'diaper'}))]
     .sort((a,b)=>b.ts-a.ts);
 
@@ -801,7 +813,7 @@ function renderHome(){
     ${state.loadError ? bannerErr() : ''}
     ${(!state.loaded && state.loading) ? bannerLoading() : ''}
     <div class="hero">
-      <img class="hero-photo" src="baby-photo.png" alt="">
+      <img class="hero-photo" src="${heroPhoto}" alt="">
       <div class="hero-text">
         <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
         <div class="hero-label">since last feed</div>
