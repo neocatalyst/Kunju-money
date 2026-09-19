@@ -856,7 +856,8 @@ function renderHome(){
       <div class="hero-text">
         <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
         <div class="hero-label">since last feed</div>
-        <div class="statuscard" style="margin-top:34px; text-align:right;"><div class="n">${mlToday}</div><div class="l">ml in 24h</div></div>
+        <div class="statuscard" style="margin-top:20px; text-align:right;"><div class="n" style="color:var(--milk);">${lastFeed ? Math.round(lastFeed.amount) : '—'}</div><div class="l">ml last fed</div></div>
+        <div class="statuscard" style="margin-top:14px; text-align:right;"><div class="n">${mlToday}</div><div class="l">ml in 24h</div></div>
       </div>
     </div>
     <div class="actions">
