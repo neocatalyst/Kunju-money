@@ -15,7 +15,7 @@
 <style>
   :root{
     color-scheme: dark;
-    --bg: #111111;
+    --bg: #060606;
     --surface: #1f1f1f;
     --surface-2: #2a2a2a;
     --line: #3a3a3a;
@@ -85,7 +85,7 @@
     padding-right:4px;
   }
   .hero-value{
-    font-size:34px;
+    font-size:48px;
     font-weight:500;
     letter-spacing:-0.01em;
     font-variant-numeric:tabular-nums;
@@ -93,7 +93,7 @@
     line-height:1.1;
   }
   .hero-label{
-    font-size:16px;
+    font-size:13px;
     color:var(--text-dim);
     margin-top:4px;
     font-weight:400;
@@ -128,8 +128,8 @@
     transition:transform 0.12s ease;
   }
   .actionbtn:active{ transform:scale(0.96); }
-  .actionbtn.feed{ background:linear-gradient(160deg, var(--milk), #d9ab54); color:#241d0a; }
-  .actionbtn.diaper{ background:linear-gradient(160deg, var(--diaper), #4f8c78); color:#0d1e19; }
+  .actionbtn.feed{ background:linear-gradient(135deg, var(--milk), #c99347); color:#241d0a; }
+  .actionbtn.diaper{ background:linear-gradient(135deg, var(--diaper), #427c69); color:#0d1e19; }
   .actionbtn .ico{ font-size:28px; }
   .actionbtn .lbl{ font-size:15px; font-weight:700; }
 
@@ -157,6 +157,7 @@
   }
   .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
   .dot.feed{ background:var(--milk); }
+  .dot.diaper{ background:var(--diaper); }
   .dot.wet{ background:var(--wet); }
   .dot.dirty{ background:var(--dirty); }
   .dot.both{ background:var(--both); }
@@ -390,9 +391,9 @@
   }
   .typegrid button:active{ transform:scale(0.96); }
   .typegrid button.sel{ color:#0d1e19; }
-  .typegrid button[data-t=wet].sel{ background:var(--wet); border-color:var(--wet); color:#0a1c2b; }
-  .typegrid button[data-t=dirty].sel{ background:var(--dirty); border-color:var(--dirty); color:#2b1707; }
-  .typegrid button[data-t=both].sel{ background:var(--both); border-color:var(--both); color:#1c1330; }
+  .typegrid button[data-t=wet].sel{ background:var(--diaper); border-color:var(--diaper); color:#0d1e19; }
+  .typegrid button[data-t=dirty].sel{ background:var(--diaper); border-color:var(--diaper); color:#0d1e19; }
+  .typegrid button[data-t=both].sel{ background:var(--diaper); border-color:var(--diaper); color:#0d1e19; }
 
   .modalbtns{ display:flex; gap:10px; margin-top:8px; }
   .btn{
@@ -738,10 +739,10 @@ function fmtDay(d){
 }
 function timeSince(d){
   const mins = Math.floor((Date.now()-d.getTime())/60000);
-  if(mins < 1) return 'just now';
-  if(mins < 60) return mins + 'm ago';
+  if(mins < 1) return 'Just now';
+  if(mins < 60) return String(mins)+'m';
   const h = Math.floor(mins/60); const m = mins%60;
-  return h + 'h ' + (m? m+'m ':'') + 'ago';
+  return h+'h'+(m? ' '+m+'m':'');
 }
 function withinHours(d, hrs){ return (Date.now()-d.getTime()) <= hrs*3600*1000; }
 function dayKey(d){ return d.toISOString().slice(0,10); }
@@ -882,7 +883,7 @@ function entryRow(e){
     </div>`;
   }
   return `<div class="${cls}" ${clickAttr}>
-    <div class="dot ${e.type}"></div>
+    <div class="dot diaper"></div>
     <div class="main">
       <div class="title">Diaper — ${e.type}</div>
     </div>
@@ -1168,6 +1169,7 @@ function nowLocalInputValue(){ return localInputValue(new Date()); }
    consistent look regardless of device/browser quirks. */
 const WHEEL_ITEM_H = 36;
 const WHEEL_DAYS_BACK = 60; // how far back the date column scrolls
+const WHEEL_LOOP_REPS = 7;  // how many times looping columns (hour, minute) repeat their list, giving buffer room before a silent reposition is needed
 
 function wheelDateLabel(offsetDays){
   const d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+offsetDays);
@@ -1175,10 +1177,13 @@ function wheelDateLabel(offsetDays){
   if(offsetDays===-1) return 'Yesterday';
   return d.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
 }
-function buildWheelCol(id, items){
+function buildWheelCol(id, items, loop){
+  const reps = loop ? WHEEL_LOOP_REPS : 1;
+  let full = [];
+  for(let r=0; r<reps; r++) full = full.concat(items);
   return `<div class="wheelcol" id="${id}">
     <div class="wheelpad"></div>
-    ${items.map(it=>`<div class="wheelitem">${it}</div>`).join('')}
+    ${full.map(it=>`<div class="wheelitem">${it}</div>`).join('')}
     <div class="wheelpad"></div>
   </div>`;
 }
@@ -1189,12 +1194,13 @@ function renderWheelPicker(prefix){
   const ampmItems = ['AM','PM'];
   return `
   <div class="wheelpicker">
-    ${buildWheelCol(prefix+'-wp-date', dateItems)}
-    ${buildWheelCol(prefix+'-wp-hour', hourItems)}
-    ${buildWheelCol(prefix+'-wp-min', minItems)}
-    ${buildWheelCol(prefix+'-wp-ampm', ampmItems)}
+    ${buildWheelCol(prefix+'-wp-date', dateItems, false)}
+    ${buildWheelCol(prefix+'-wp-hour', hourItems, true)}
+    ${buildWheelCol(prefix+'-wp-min', minItems, true)}
+    ${buildWheelCol(prefix+'-wp-ampm', ampmItems, false)}
     <div class="wheel-highlight"></div>
-  </div>`;
+  </div>
+  <button type="button" class="btn ghost" id="${prefix}-picker-done" style="width:100%; margin-top:12px;">Done</button>`;
 }
 function initWheelPicker(prefix, dateObj){
   const d = new Date(dateObj);
@@ -1210,17 +1216,32 @@ function initWheelPicker(prefix, dateObj){
   const hourIndex = hour12-1;
   const minuteIndex = d.getMinutes();
 
+  const midRep = Math.floor(WHEEL_LOOP_REPS/2);
+
+  // [elementId, startIndex, loops?, itemCount]
   const cols = [
-    [prefix+'-wp-date', dateIndex],
-    [prefix+'-wp-hour', hourIndex],
-    [prefix+'-wp-min', minuteIndex],
-    [prefix+'-wp-ampm', ampmIndex]
+    [prefix+'-wp-date', dateIndex, false, WHEEL_DAYS_BACK+1],
+    [prefix+'-wp-hour', hourIndex, true, 12],
+    [prefix+'-wp-min', minuteIndex, true, 60],
+    [prefix+'-wp-ampm', ampmIndex, false, 2]
   ];
-  cols.forEach(([id, idx])=>{
+  cols.forEach(([id, idx, loop, count])=>{
     const el = document.getElementById(id);
     if(!el) return;
-    el.scrollTop = idx*WHEEL_ITEM_H;
+    el.scrollTop = (loop ? (midRep*count + idx) : idx) * WHEEL_ITEM_H;
     const update = ()=>{
+      if(loop){
+        const currentPos = el.scrollTop/WHEEL_ITEM_H;
+        const currentRep = Math.floor(currentPos/count);
+        // Drifted near the true start/end of the repeated list — silently
+        // snap back to the equivalent spot in the middle repetitions.
+        // Since every repetition shows the exact same values, this jump
+        // is visually invisible; it's what makes the wheel feel infinite.
+        if(currentRep <= 0 || currentRep >= WHEEL_LOOP_REPS-1){
+          const withinRepIdx = ((Math.round(currentPos) % count) + count) % count;
+          el.scrollTop = (midRep*count + withinRepIdx) * WHEEL_ITEM_H;
+        }
+      }
       const nearest = Math.round(el.scrollTop/WHEEL_ITEM_H);
       el.querySelectorAll('.wheelitem').forEach((it,i)=>{ it.classList.toggle('selected', i===nearest); });
     };
@@ -1229,16 +1250,22 @@ function initWheelPicker(prefix, dateObj){
   });
 }
 function readWheelPicker(prefix){
-  const idx = (id, max)=>{
+  const idxBounded = (id, max)=>{
     const el = document.getElementById(id);
     if(!el) return 0;
     return Math.max(0, Math.min(max, Math.round(el.scrollTop/WHEEL_ITEM_H)));
   };
-  const dateIdx = idx(prefix+'-wp-date', WHEEL_DAYS_BACK);
+  const idxLoop = (id, count)=>{
+    const el = document.getElementById(id);
+    if(!el) return 0;
+    const nearest = Math.round(el.scrollTop/WHEEL_ITEM_H);
+    return ((nearest % count) + count) % count;
+  };
+  const dateIdx = idxBounded(prefix+'-wp-date', WHEEL_DAYS_BACK);
   const offsetDays = dateIdx - WHEEL_DAYS_BACK;
-  const hour12 = idx(prefix+'-wp-hour', 11) + 1;
-  const minute = idx(prefix+'-wp-min', 59);
-  const isPM = idx(prefix+'-wp-ampm', 1) === 1;
+  const hour12 = idxLoop(prefix+'-wp-hour', 12) + 1;
+  const minute = idxLoop(prefix+'-wp-min', 60);
+  const isPM = idxBounded(prefix+'-wp-ampm', 1) === 1;
 
   const d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+offsetDays);
   let hour24 = hour12 % 12; if(isPM) hour24 += 12;
@@ -1256,6 +1283,36 @@ function renderPickerField(prefix, dateObj, isOpen){
   </button>`;
 }
 
+// Opens/closes the date-time picker by swapping only its own small
+// container in place, instead of re-rendering the whole modal — that
+// full re-render was what made the modal look like it was "refreshing"
+// and replaying its opening animation every time you touched the picker.
+function getPickerTimeValue(prefix){ return prefix==='feed' ? feedTimeValue : diaperTimeValue; }
+function setPickerTimeValue(prefix, val){ if(prefix==='feed') feedTimeValue = val; else diaperTimeValue = val; }
+function setPickerOpenFlag(prefix, val){ if(prefix==='feed') feedPickerOpen = val; else diaperPickerOpen = val; }
+
+function bindPickerToggle(prefix){
+  const btn = document.getElementById(prefix+'-picker-toggle');
+  if(btn) btn.onclick = ()=>{
+    setPickerOpenFlag(prefix, true);
+    const container = document.getElementById(prefix+'-picker-field');
+    container.innerHTML = renderPickerField(prefix, getPickerTimeValue(prefix), true);
+    initWheelPicker(prefix, getPickerTimeValue(prefix));
+    bindPickerDone(prefix);
+  };
+}
+function bindPickerDone(prefix){
+  const btn = document.getElementById(prefix+'-picker-done');
+  if(btn) btn.onclick = ()=>{
+    const dateObj = readWheelPicker(prefix);
+    setPickerTimeValue(prefix, dateObj);
+    setPickerOpenFlag(prefix, false);
+    const container = document.getElementById(prefix+'-picker-field');
+    container.innerHTML = renderPickerField(prefix, dateObj, false);
+    bindPickerToggle(prefix);
+  };
+}
+
 let feedAmount = 0;
 let feedTimeValue = null;
 let feedPickerOpen = false;
@@ -1269,7 +1326,7 @@ function renderFeedModal(){
     <div class="modal">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
         <h2 style="margin:0;">${editing ? 'Edit bottle' : 'Log bottle'}</h2>
-        ${editing ? `<button class="iconbtn" id="feed-delete" aria-label="Delete entry" style="color:var(--danger);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
+        ${editing ? `<button class="iconbtn" id="feed-delete" aria-label="Delete entry" style="background:var(--surface-2); color:var(--text-dim); width:34px; height:34px; border-radius:50%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
       </div>
       <div class="field">
         <label>Amount (ml)</label>
@@ -1280,7 +1337,7 @@ function renderFeedModal(){
       </div>
       <div class="field">
         <label>Date &amp; time</label>
-        ${renderPickerField('feed', feedTimeValue, feedPickerOpen)}
+        <div id="feed-picker-field">${renderPickerField('feed', feedTimeValue, feedPickerOpen)}</div>
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="feed-cancel">Cancel</button>
@@ -1301,7 +1358,7 @@ function renderDiaperModal(){
     <div class="modal">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
         <h2 style="margin:0;">${editing ? 'Edit diaper' : 'Log diaper'}</h2>
-        ${editing ? `<button class="iconbtn" id="diaper-delete" aria-label="Delete entry" style="color:var(--danger);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
+        ${editing ? `<button class="iconbtn" id="diaper-delete" aria-label="Delete entry" style="background:var(--surface-2); color:var(--text-dim); width:34px; height:34px; border-radius:50%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
       </div>
       <div class="field">
         <label>Type</label>
@@ -1313,7 +1370,7 @@ function renderDiaperModal(){
       </div>
       <div class="field">
         <label>Date &amp; time</label>
-        ${renderPickerField('diaper', diaperTimeValue, diaperPickerOpen)}
+        <div id="diaper-picker-field">${renderPickerField('diaper', diaperTimeValue, diaperPickerOpen)}</div>
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="diaper-cancel">Cancel</button>
@@ -1366,7 +1423,7 @@ function renderWeightModal(){
     <div class="modal">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
         <h2 style="margin:0;">${editing ? 'Edit weigh-in' : 'Log weight'}</h2>
-        ${editing ? `<button class="iconbtn" id="weight-delete" aria-label="Delete entry" style="color:var(--danger);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
+        ${editing ? `<button class="iconbtn" id="weight-delete" aria-label="Delete entry" style="background:var(--surface-2); color:var(--text-dim); width:34px; height:34px; border-radius:50%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
       </div>
       <div class="field">
         <label>Weight</label>
@@ -1423,8 +1480,8 @@ function attachHandlers(){
   /* feed modal */
   const feedAmtInput = document.getElementById('feed-amt-input');
   if(feedAmtInput) feedAmtInput.oninput = ()=>{ feedAmount = Number(feedAmtInput.value) || 0; };
-  const feedPickerToggle = document.getElementById('feed-picker-toggle');
-  if(feedPickerToggle) feedPickerToggle.onclick = ()=>{ feedPickerOpen = true; render(); };
+  bindPickerToggle('feed');
+  if(feedPickerOpen) bindPickerDone('feed');
   document.querySelectorAll('.presetchip').forEach(b=>{
     b.onclick = ()=>{
       feedAmount = Number(b.dataset.preset);
@@ -1455,8 +1512,8 @@ function attachHandlers(){
   document.querySelectorAll('.typegrid button').forEach(b=>{
     b.onclick = ()=>{ diaperType = b.dataset.t; document.querySelectorAll('.typegrid button').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); };
   });
-  const diaperPickerToggle = document.getElementById('diaper-picker-toggle');
-  if(diaperPickerToggle) diaperPickerToggle.onclick = ()=>{ diaperPickerOpen = true; render(); };
+  bindPickerToggle('diaper');
+  if(diaperPickerOpen) bindPickerDone('diaper');
   const diaperCancel = document.getElementById('diaper-cancel');
   if(diaperCancel) diaperCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); scrollToTop(); };
   const diaperSave = document.getElementById('diaper-save');
