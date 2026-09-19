@@ -16,9 +16,9 @@
   :root{
     color-scheme: dark;
     --bg: #111111;
-    --surface: #1E202C;
-    --surface-2: #262838;
-    --line: #33354a;
+    --surface: #1f1f1f;
+    --surface-2: #2a2a2a;
+    --line: #3a3a3a;
     --text: #EEEBE2;
     --text-dim: #9C9DB2;
     --milk: #F2C879;
@@ -540,6 +540,7 @@ const state = {
   period: 24,             // hours: 24, 168, 720
   modal: null,            // 'feed' | 'diaper' | 'weight' | null
   editingId: null,        // id of the entry being edited, or null when adding new
+  confirmDelete: null,    // {message, onConfirm} while a delete confirmation is showing, else null
   recentWindowDays: 2     // how far back "Recent activity" on Home currently shows
 };
 
@@ -765,6 +766,7 @@ function render(){
     ${state.modal==='diaper' ? renderDiaperModal() : ''}
     ${state.modal==='weight' ? renderWeightModal() : ''}
     ${state.modal==='weightDetail' ? renderWeightDetailModal() : ''}
+    ${state.confirmDelete ? renderConfirmDeleteModal() : ''}
   `;
   attachHandlers();
   if(state.modal==='feed'){
@@ -776,6 +778,30 @@ function render(){
   if(state.modal==='weightDetail'){
     setTimeout(()=>drawWeightChart('weightChartExpanded', true), 30);
   }
+  if(state.confirmDelete){
+    const cancelBtn = document.getElementById('confirm-delete-cancel');
+    const okBtn = document.getElementById('confirm-delete-ok');
+    if(cancelBtn) cancelBtn.onclick = ()=>{ state.confirmDelete = null; render(); };
+    if(okBtn) okBtn.onclick = async ()=>{
+      const action = state.confirmDelete.onConfirm;
+      state.confirmDelete = null;
+      await action();
+    };
+  }
+}
+
+function renderConfirmDeleteModal(){
+  return `
+    <div class="modalbg" style="align-items:center; z-index:60;">
+      <div class="modal" style="border-radius:20px; max-width:340px; text-align:center;">
+        <div style="font-size:15px; line-height:1.5; margin-bottom:22px;">${state.confirmDelete.message}</div>
+        <div style="display:flex; gap:10px;">
+          <button id="confirm-delete-cancel" class="btn ghost" style="flex:1; padding:13px;">Cancel</button>
+          <button id="confirm-delete-ok" class="btn" style="flex:1; padding:13px; background:var(--danger); color:#fff;">Delete</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 const TAB_ICONS = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h4v-6h2v6h4a1 1 0 0 0 1-1v-9"/></svg>`,
@@ -813,7 +839,7 @@ function renderHome(){
   const hasMoreBeyondWindow = allActivity.length > recent.length;
 
   return `
-    <div style="text-align:center; font-family:'Pacifico',cursive; font-size:22px; color:#fff; opacity:0.85;">Kunju Money</div>
+    <div style="text-align:center; font-family:'Pacifico',cursive; font-size:24px; color:#fff; opacity:0.85;">Kunju Money</div>
     ${state.loadError ? bannerErr() : ''}
     ${(!state.loaded && state.loading) ? bannerLoading() : ''}
     <div class="hero">
@@ -1414,8 +1440,10 @@ function attachHandlers(){
     feedAmount = 0;
   };
   const feedDelete = document.getElementById('feed-delete');
-  if(feedDelete) feedDelete.onclick = async ()=>{
-    if(confirm('Delete this bottle entry?')) await deleteFeed(state.editingId);
+  if(feedDelete) feedDelete.onclick = ()=>{
+    const id = state.editingId;
+    state.confirmDelete = { message:'Delete this bottle entry?', onConfirm: async ()=>{ await deleteFeed(id); } };
+    render();
   };
 
   /* diaper modal */
@@ -1436,8 +1464,10 @@ function attachHandlers(){
     }
   };
   const diaperDelete = document.getElementById('diaper-delete');
-  if(diaperDelete) diaperDelete.onclick = async ()=>{
-    if(confirm('Delete this diaper entry?')) await deleteDiaper(state.editingId);
+  if(diaperDelete) diaperDelete.onclick = ()=>{
+    const id = state.editingId;
+    state.confirmDelete = { message:'Delete this diaper entry?', onConfirm: async ()=>{ await deleteDiaper(id); } };
+    render();
   };
 
   /* weight modal */
@@ -1476,8 +1506,10 @@ function attachHandlers(){
     weightAmount = 0;
   };
   const weightDelete = document.getElementById('weight-delete');
-  if(weightDelete) weightDelete.onclick = async ()=>{
-    if(confirm('Delete this weigh-in?')) await deleteWeight(state.editingId);
+  if(weightDelete) weightDelete.onclick = ()=>{
+    const id = state.editingId;
+    state.confirmDelete = { message:'Delete this weigh-in?', onConfirm: async ()=>{ await deleteWeight(id); } };
+    render();
   };
 
   /* tap an entry row to edit it */
