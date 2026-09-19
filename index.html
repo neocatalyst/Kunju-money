@@ -28,7 +28,7 @@
     --radius: 18px;
     --radius-sm: 12px;
   }
-  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; touch-action:manipulation;}
   html,body{height:100%;}
   body{
     margin:0;
@@ -112,7 +112,9 @@
     gap:8px;
     font-family:inherit;
     cursor:pointer;
+    transition:transform 0.12s ease;
   }
+  .actionbtn:active{ transform:scale(0.96); }
   .actionbtn.feed{ background:linear-gradient(160deg, var(--milk), #d9ab54); color:#241d0a; }
   .actionbtn.diaper{ background:linear-gradient(160deg, var(--diaper), #4f8c78); color:#0d1e19; }
   .actionbtn .ico{ font-size:28px; }
@@ -230,9 +232,11 @@
     flex-direction:column;
     align-items:center;
     gap:3px;
-    padding:6px 0;
+    padding:8px 0;
     cursor:pointer;
+    transition:transform 0.1s ease;
   }
+  .tabbtn:active{ transform:scale(0.92); }
   .tabbtn .ico{ font-size:20px; }
   .tabbtn .lbl{ font-size:10.5px; font-weight:600; }
   .tabbtn.active{ color:var(--milk); }
@@ -243,7 +247,10 @@
     background:rgba(10,10,15,0.6);
     display:flex; align-items:flex-end;
     z-index:50;
+    animation:fadeIn 0.18s ease-out;
   }
+  @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+  @keyframes slideUp{ from{ transform:translateY(100%); } to{ transform:translateY(0); } }
   .modal{
     background:var(--surface);
     width:100%;
@@ -253,10 +260,13 @@
     padding:22px 20px calc(26px + env(safe-area-inset-bottom)) 20px;
     border:1px solid var(--line);
     border-bottom:none;
+    animation:slideUp 0.22s cubic-bezier(.32,.72,.35,1);
+    max-height:88vh;
+    overflow-y:auto;
   }
-  .modal h2{ font-size:18px; margin:0 0 18px 0; }
-  .field{ margin-bottom:16px; }
-  .field label{ font-size:12.5px; color:var(--text-dim); display:block; margin-bottom:7px; font-weight:600; }
+  .modal h2{ font-size:19px; margin:0 0 20px 0; letter-spacing:-0.01em; }
+  .field{ margin-bottom:18px; }
+  .field label{ font-size:12.5px; color:var(--text-dim); display:block; margin-bottom:8px; font-weight:600; }
   .amtrow{ display:flex; align-items:center; gap:12px; }
   .amtbtn{
     width:42px; height:42px; border-radius:50%;
@@ -265,26 +275,38 @@
   }
   .amtval{ flex:1; text-align:center; font-size:24px; font-weight:700; }
   .amtinput{
-    width:100%; padding:14px 16px; border-radius:var(--radius-sm);
-    border:1px solid var(--line); background:var(--surface-2); color:var(--text);
-    font-family:inherit; font-size:26px; font-weight:700; text-align:center;
+    width:100%; padding:16px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); background:var(--surface-2); color:var(--text);
+    font-family:inherit; font-size:32px; font-weight:700; text-align:center;
+    transition:border-color 0.15s ease;
   }
+  .amtinput:focus{ outline:none; border-color:var(--milk); }
+  .presetrow{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .presetchip{
+    flex:1; min-width:56px; padding:9px 0; text-align:center;
+    border-radius:999px; border:1px solid var(--line); background:var(--surface-2);
+    color:var(--text-dim); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .presetchip:active{ background:var(--milk-dim); color:var(--milk); }
   .unittoggle{ display:flex; gap:6px; }
   .unittoggle button{
-    padding:6px 14px; border-radius:999px; border:1px solid var(--line);
-    background:var(--surface-2); color:var(--text-dim); font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;
+    padding:8px 16px; border-radius:999px; border:1px solid var(--line);
+    background:var(--surface-2); color:var(--text-dim); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
   }
   .unittoggle button.active{ background:var(--milk); color:#241d0a; border-color:var(--milk); }
   input[type=datetime-local], input[type=text]{
-    width:100%; padding:12px 14px; border-radius:var(--radius-sm);
-    border:1px solid var(--line); background:var(--surface-2); color:var(--text);
-    font-family:inherit; font-size:15px;
+    width:100%; padding:13px 14px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); background:var(--surface-2); color:var(--text);
+    font-family:inherit; font-size:16px;
   }
+  input[type=datetime-local]:focus, input[type=text]:focus{ outline:none; border-color:var(--milk); }
   .typegrid{ display:flex; gap:10px; }
   .typegrid button{
-    flex:1; padding:16px 8px; border-radius:var(--radius-sm); border:1px solid var(--line);
-    background:var(--surface-2); color:var(--text-dim); font-family:inherit; font-weight:700; font-size:13.5px; cursor:pointer;
+    flex:1; padding:18px 8px; border-radius:var(--radius-sm); border:1.5px solid var(--line);
+    background:var(--surface-2); color:var(--text-dim); font-family:inherit; font-weight:700; font-size:14px; cursor:pointer;
+    transition:transform 0.1s ease;
   }
+  .typegrid button:active{ transform:scale(0.96); }
   .typegrid button.sel{ color:#0d1e19; }
   .typegrid button[data-t=wet].sel{ background:var(--wet); border-color:var(--wet); color:#0a1c2b; }
   .typegrid button[data-t=dirty].sel{ background:var(--dirty); border-color:var(--dirty); color:#2b1707; }
@@ -292,9 +314,11 @@
 
   .modalbtns{ display:flex; gap:10px; margin-top:8px; }
   .btn{
-    flex:1; padding:14px; border-radius:var(--radius-sm); border:none;
-    font-family:inherit; font-weight:700; font-size:15px; cursor:pointer;
+    flex:1; padding:15px; border-radius:var(--radius-sm); border:none;
+    font-family:inherit; font-weight:700; font-size:15.5px; cursor:pointer;
+    transition:transform 0.1s ease, opacity 0.1s ease;
   }
+  .btn:active{ transform:scale(0.97); opacity:0.9; }
   .btn.primary{ background:var(--milk); color:#241d0a; }
   .btn.primary.diaper{ background:var(--diaper); color:#0d1e19; }
   .btn.ghost{ background:var(--surface-2); color:var(--text-dim); }
@@ -510,6 +534,10 @@ function render(){
     ${state.modal==='diaper' ? renderDiaperModal() : ''}
   `;
   attachHandlers();
+  if(state.modal==='feed'){
+    const amtEl = document.getElementById('feed-amt-input');
+    if(amtEl){ amtEl.focus(); amtEl.select(); }
+  }
 }
 function tabBtn(id, icon, label){
   return `<button class="tabbtn ${state.tab===id?'active':''}" data-tab="${id}">
@@ -760,13 +788,18 @@ function renderFeedModal(){
   if(feedUnit===null) feedUnit = state.config.unit || 'ml';
   const editing = !!state.editingId;
   const timeVal = feedTimeValue || nowLocalInputValue();
+  const amtDisplay = (feedAmount === 0 && !editing) ? '' : feedAmount;
+  const presets = feedUnit === 'oz' ? [1,2,3,4,5,6] : [30,60,90,120,150,180];
   return `
   <div class="modalbg" id="modal-bg-feed">
     <div class="modal">
       <h2>${editing ? 'Edit bottle' : 'Log bottle'}</h2>
       <div class="field">
         <label>Amount</label>
-        <input type="number" inputmode="decimal" id="feed-amt-input" class="amtinput" value="${feedAmount}" min="0" step="1">
+        <input type="number" inputmode="decimal" id="feed-amt-input" class="amtinput" value="${amtDisplay}" placeholder="0" min="0" step="1">
+        <div class="presetrow">
+          ${presets.map(p=>`<button type="button" class="presetchip" data-preset="${p}">${p}</button>`).join('')}
+        </div>
       </div>
       <div class="field">
         <label>Unit</label>
@@ -875,7 +908,20 @@ function attachHandlers(){
   const feedAmtInput = document.getElementById('feed-amt-input');
   if(feedAmtInput) feedAmtInput.oninput = ()=>{ feedAmount = Number(feedAmtInput.value) || 0; };
   document.querySelectorAll('#feed-unit-toggle button').forEach(b=>{
-    b.onclick = ()=>{ feedUnit = b.dataset.u; document.querySelectorAll('#feed-unit-toggle button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); };
+    b.onclick = ()=>{
+      const timeEl = document.getElementById('feed-time');
+      if(timeEl) feedTimeValue = timeEl.value;
+      feedUnit = b.dataset.u;
+      render();
+    };
+  });
+  document.querySelectorAll('.presetchip').forEach(b=>{
+    b.onclick = ()=>{
+      const timeEl = document.getElementById('feed-time');
+      if(timeEl) feedTimeValue = timeEl.value;
+      feedAmount = Number(b.dataset.preset);
+      render();
+    };
   });
   const feedCancel = document.getElementById('feed-cancel');
   if(feedCancel) feedCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); };
