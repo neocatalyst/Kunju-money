@@ -32,8 +32,6 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; touch-action:manipulation;}
   html,body{
     margin:0;
-    overscroll-behavior-y:none;
-    overscroll-behavior:none;
   }
   body{
     background:var(--bg);
@@ -244,10 +242,13 @@
     background:var(--bg);
     display:flex;
     padding:8px 6px calc(8px + env(safe-area-inset-bottom)) 6px;
-    transform:translateZ(0);
-    -webkit-transform:translateZ(0);
+    transform:translate3d(0,0,0);
+    -webkit-transform:translate3d(0,0,0);
     will-change:transform;
     backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+    contain:layout style paint;
+    isolation:isolate;
   }
   .tabbar::before{
     content:'';
@@ -413,18 +414,37 @@
   .settingsblock .help{ font-size:12px; color:var(--text-dim); margin-top:8px; line-height:1.5; }
 
   .lovecard{
-    text-align:center;
     padding:8px 16px 40px 16px;
   }
-  .lovephoto{
-    width:100%;
+  .aboutrow{
+    position:relative;
+    display:flex;
+    align-items:center;
+    min-height:340px;
+    padding:6px 0 10px 0;
+  }
+  .about-photo{
+    position:absolute;
+    top:-4px;
+    left:-36px;
+    width:280px;
     height:auto;
-    margin:28px auto 0 auto;
-    display:block;
-    border-radius:20px;
+    transform:rotate(-7deg);
+    pointer-events:none;
+    user-select:none;
+    z-index:0;
+    border-radius:16px;
+  }
+  .about-text{
+    position:relative;
+    z-index:1;
+    margin-left:auto;
+    text-align:right;
+    max-width:56%;
+    padding-right:4px;
   }
   .loveheart{
-    font-size:40px;
+    font-size:32px;
     line-height:1;
     animation:heartbeat 2.4s ease-in-out infinite;
   }
@@ -437,19 +457,10 @@
   }
   .lovetitle{
     font-size:19px;
-    font-weight:800;
+    font-weight:300;
     letter-spacing:-0.01em;
-    margin-top:14px;
+    margin-top:8px;
     line-height:1.4;
-  }
-  .lovesub{
-    font-size:13px;
-    color:var(--text-dim);
-    margin-top:10px;
-    line-height:1.6;
-    max-width:260px;
-    margin-left:auto;
-    margin-right:auto;
   }
   textarea, .urlinput{
     width:100%; padding:12px 14px; border-radius:var(--radius-sm);
@@ -1167,11 +1178,15 @@ function drawWeightChart(canvasId, expanded){
 /* ---------------- settings ---------------- */
 function renderAbout(){
   return `
-    <div style="display:flex; flex-direction:column; align-items:center; padding-top:56px;">
+    <div style="padding-top:64px;">
       <div class="lovecard">
-        <div class="loveheart">❤️</div>
-        <div class="lovetitle">Made with love,<br>for our little Kunju Money</div>
-        <img class="lovephoto" src="baby-photo.png" alt="">
+        <div class="aboutrow">
+          <img class="about-photo" src="baby-photo.png" alt="">
+          <div class="about-text">
+            <div class="loveheart">❤️</div>
+            <div class="lovetitle">Made with love,<br>for our little Kunju Money</div>
+          </div>
+        </div>
       </div>
     </div>
   `;
