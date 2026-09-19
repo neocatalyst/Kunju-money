@@ -585,6 +585,7 @@ const state = {
   loading: false,
   backgroundRefreshing: false,
   loadError: null,
+  syncError: false,  // true when a recent save/edit/delete failed even after retrying
   tab: 'home',
   period: 24,             // hours: 24, 168, 720
   modal: null,            // 'feed' | 'diaper' | 'weight' | null
@@ -683,12 +684,35 @@ function normalizeWeight(row){
   return { id: row.Id || '', ts: isNaN(ts) ? null : ts, weightKg: Number(row.Weight)||0 };
 }
 
-async function postRow(sheet, body){
-  await fetch(sheetBase(), {
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(Object.assign({sheet, key: API_KEY}, body))
-  });
+async function postRow(sheet, body, attempt){
+  attempt = attempt || 1;
+  try{
+    const res = await fetch(sheetBase(), {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify(Object.assign({sheet, key: API_KEY}, body))
+    });
+    const json = await res.json();
+    if(!json || json.success !== true){
+      throw new Error((json && json.error) || 'Save failed');
+    }
+    state.syncError = false;
+    return json;
+  }catch(err){
+    if(attempt < 2){
+      // One automatic retry — covers a brief network hiccup, common on
+      // mobile switching between wifi and cellular mid-save.
+      return postRow(sheet, body, attempt+1);
+    }
+    // Still failing after a retry. Silently swallowing this would mean
+    // your device thinks it saved (local state already shows it) while
+    // the sheet never actually received it — the other person's device
+    // would then never see it either. Surface it instead so it's obvious
+    // something needs a retry, rather than quietly drifting out of sync.
+    state.syncError = true;
+    render();
+    throw err;
+  }
 }
 
 async function logFeed(amount, unit, dateObj){
@@ -698,7 +722,7 @@ async function logFeed(amount, unit, dateObj){
   state.feedings.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
   render(); scrollToTop();
-  await postRow('Feedings', { action:'add', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' });
+  try{ await postRow('Feedings', { action:'add', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 async function logDiaper(type, dateObj){
@@ -708,7 +732,7 @@ async function logDiaper(type, dateObj){
   state.diapers.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
   render(); scrollToTop();
-  await postRow('Diapers', { action:'add', id, timestamp: dateObj.toISOString(), type, loggedBy: '' });
+  try{ await postRow('Diapers', { action:'add', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 async function logWeight(weightKg, dateObj){
@@ -718,7 +742,7 @@ async function logWeight(weightKg, dateObj){
   state.weights.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
   render(); scrollToTop();
-  await postRow('Weights', { action:'add', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' });
+  try{ await postRow('Weights', { action:'add', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 
@@ -728,7 +752,7 @@ async function updateFeed(id, amount, unit, dateObj){
   state.feedings.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  await postRow('Feedings', { action:'update', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' });
+  try{ await postRow('Feedings', { action:'update', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 async function updateDiaper(id, type, dateObj){
@@ -737,7 +761,7 @@ async function updateDiaper(id, type, dateObj){
   state.diapers.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type, loggedBy: '' });
+  try{ await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 async function updateWeight(id, weightKg, dateObj){
@@ -746,7 +770,7 @@ async function updateWeight(id, weightKg, dateObj){
   state.weights.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  await postRow('Weights', { action:'update', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' });
+  try{ await postRow('Weights', { action:'update', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 
@@ -754,21 +778,21 @@ async function deleteFeed(id){
   state.feedings = state.feedings.filter(f=>f.id!==id);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  await postRow('Feedings', { action:'delete', id });
+  try{ await postRow('Feedings', { action:'delete', id }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 async function deleteDiaper(id){
   state.diapers = state.diapers.filter(d=>d.id!==id);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  await postRow('Diapers', { action:'delete', id });
+  try{ await postRow('Diapers', { action:'delete', id }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 async function deleteWeight(id){
   state.weights = state.weights.filter(w=>w.id!==id);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  await postRow('Weights', { action:'delete', id });
+  try{ await postRow('Weights', { action:'delete', id }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 
@@ -890,6 +914,7 @@ function renderHome(){
   return `
     <div style="text-align:center; font-family:'Pacifico',cursive; font-size:18px; color:#fff; opacity:0.85;">Kunju Money</div>
     ${state.loadError ? bannerErr() : ''}
+    ${state.syncError ? bannerSyncErr() : ''}
     ${(!state.loaded && state.loading) ? bannerLoading() : ''}
     <div class="hero">
       <img class="hero-photo" src="${heroPhoto}" alt="">
@@ -928,7 +953,7 @@ function entryRow(e){
     return `<div class="${cls}" ${clickAttr}>
       <div class="dot feed" style="width:${feedDotSize}px; height:${feedDotSize}px;"></div>
       <div class="main">
-        <div class="title">${e.amount ? e.amount+' ml bottle' : 'Bottle — amount not set'}</div>
+        <div class="title">${e.amount ? e.amount+' ml bottle' : 'Bottle start time noted'}</div>
       </div>
       <div class="time">${fmtDay(e.ts)}<br>${fmtTime(e.ts)}</div>
       ${editable ? `<div class="chev">›</div>` : ''}
@@ -949,6 +974,9 @@ function entryRow(e){
 }
 function bannerErr(){
   return `<div class="banner err">⚠️ <div>${state.loadError}</div></div>`;
+}
+function bannerSyncErr(){
+  return `<div class="banner err">⚠️ <div>Couldn't save your last change — check your connection, then tap refresh to try reconciling.</div></div>`;
 }
 function bannerLoading(){
   return `<div class="banner"><div class="spinner"></div><div>Loading from your sheet…</div></div>`;
@@ -986,6 +1014,7 @@ function renderTrends(){
 
   return `
     ${state.loadError ? bannerErr() : ''}
+    ${state.syncError ? bannerSyncErr() : ''}
     <div class="periodtabs">
       <button class="${state.period===24?'active':''}" data-period="24">24h</button>
       <button class="${state.period===168?'active':''}" data-period="168">Week</button>
@@ -1540,7 +1569,7 @@ function attachHandlers(){
     b.onclick = ()=>{ state.period = Number(b.dataset.period); render(); if(state.tab==='trends') setTimeout(drawCharts, 30); };
   });
   const refreshHome = document.getElementById('refresh-home');
-  if(refreshHome) refreshHome.onclick = fetchAll;
+  if(refreshHome) refreshHome.onclick = ()=>{ state.syncError = false; fetchAll(); };
   const loadMoreActivity = document.getElementById('load-more-activity');
   if(loadMoreActivity) loadMoreActivity.onclick = ()=>{ state.recentWindowDays += 7; render(); };
 
@@ -1678,6 +1707,32 @@ function setupViewportGuard(){
   if(state.config) fetchAll(); // quietly refreshes with live data in the background
   setupViewportGuard();
   setInterval(()=>{ if(state.tab==='home') render(); }, 60000);
+
+  // Two people are using this from separate devices, so this device's
+  // own view can go stale the moment the OTHER person logs something —
+  // nothing here will trigger a fetch on its own until this device is
+  // actively used or looked at again. These two triggers close that gap:
+
+  // 1) Re-sync the instant this device is actually looked at again —
+  //    switching back from another app, turning the screen back on, or
+  //    reopening the Home Screen icon after it was backgrounded. This is
+  //    the single highest-value moment to refresh, since it's exactly
+  //    when a stale view would otherwise be visible and misleading.
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible' && state.config && !state.modal){
+      fetchAll();
+    }
+  });
+
+  // 2) A gentle periodic refresh while the app is left open and visible,
+  //    so if both of you have it open at the same time without ever
+  //    switching away, this device still notices the other's changes
+  //    within a couple of minutes rather than only on your next action.
+  setInterval(()=>{
+    if(document.visibilityState === 'visible' && state.config && !state.modal){
+      fetchAll();
+    }
+  }, 120000);
 })();
 </script>
 </body>
