@@ -234,13 +234,12 @@
     z-index:20;
     background:var(--bg);
     display:flex;
-    padding:8px 6px calc(8px + env(safe-area-inset-bottom)) 6px;
+    padding:10px 6px calc(10px + env(safe-area-inset-bottom)) 6px;
     transform:translate3d(0,0,0);
     -webkit-transform:translate3d(0,0,0);
     will-change:transform;
     backface-visibility:hidden;
     -webkit-backface-visibility:hidden;
-    contain:layout style paint;
     isolation:isolate;
   }
   .tabbar::before{
@@ -259,18 +258,17 @@
     color:var(--text-dim);
     font-family:inherit;
     display:flex;
-    flex-direction:column;
     align-items:center;
-    gap:3px;
-    padding:8px 0;
+    justify-content:center;
+    padding:10px 0;
     cursor:pointer;
     transition:transform 0.1s ease;
   }
   .tabbtn:active{ transform:scale(0.92); }
-  .tabbtn .ico{ display:flex; }
+  .tabbtn .ico{ display:flex; align-items:center; justify-content:center; width:42px; height:34px; border-radius:14px; transition:background 0.15s ease; }
   .tabbtn .ico svg{ width:22px; height:22px; display:block; }
-  .tabbtn .lbl{ font-size:10.5px; font-weight:600; }
   .tabbtn.active{ color:var(--milk); }
+  .tabbtn.active .ico{ background:var(--surface-2); }
 
   /* modal */
   .modalbg{
@@ -829,8 +827,8 @@ const TAB_ICONS = {
   about: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-7.5-10.3C4.5 7 6.6 5 9.2 5c1.4 0 2.6.7 3.3 1.8C13.2 5.7 14.4 5 15.8 5c2.6 0 4.7 2 4.7 5.2 0 5.7-7.5 10.3-7.5 10.3z"/></svg>`
 };
 function tabBtn(id, iconKey, label){
-  return `<button class="tabbtn ${state.tab===id?'active':''}" data-tab="${id}">
-    <span class="ico">${TAB_ICONS[iconKey]}</span><span class="lbl">${label}</span>
+  return `<button class="tabbtn ${state.tab===id?'active':''}" data-tab="${id}" aria-label="${label}">
+    <span class="ico">${TAB_ICONS[iconKey]}</span>
   </button>`;
 }
 function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -857,6 +855,7 @@ function renderHome(){
       <div class="hero-text">
         <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
         <div class="hero-label">since last feed</div>
+        <div class="statuscard" style="margin-top:22px; text-align:right;"><div class="n">${mlToday}</div><div class="l">ml in 24h</div></div>
       </div>
     </div>
     <div class="actions">
@@ -866,10 +865,6 @@ function renderHome(){
       <button class="actionbtn diaper" data-open="diaper">
         <span class="ico">👶</span><span class="lbl">Log Diaper</span>
       </button>
-    </div>
-    <div class="statusrow">
-      <div class="statuscard"><div class="n">${feedsToday.length}</div><div class="l">Feeds in 24h</div></div>
-      <div class="statuscard"><div class="n">${mlToday}</div><div class="l">ml in 24h</div></div>
     </div>
     <div class="sectiontitle" style="margin-top:44px; margin-bottom:2px; border-bottom:none; padding-bottom:0; display:flex; align-items:center; gap:8px;">
       <span>Recent activity</span>
