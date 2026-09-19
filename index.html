@@ -36,6 +36,8 @@
     color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
     overflow-x:hidden;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
   }
   #app{
     max-width:480px;
@@ -47,57 +49,52 @@
     position:relative;
   }
   .topbar{
-    padding:22px 20px 10px 20px;
-    display:flex;
-    align-items:baseline;
-    justify-content:space-between;
+    padding:26px 20px 4px 20px;
   }
   .topbar h1{
-    font-size:22px;
-    font-weight:700;
+    font-size:21px;
+    font-weight:800;
     margin:0;
-    letter-spacing:-0.01em;
-  }
-  .topbar .who{
-    font-size:13px;
-    color:var(--text-dim);
+    letter-spacing:-0.02em;
   }
   .screen{ padding:0 20px 20px 20px; flex:1; }
   .hide{display:none !important;}
 
-  /* who am I chip row */
-  .chip{
-    flex:1;
-    padding:10px 0;
+  /* hero stat — the single most prominent number on the home screen */
+  .hero{
+    padding:20px 4px 26px 4px;
     text-align:center;
-    border-radius:999px;
-    border:1px solid var(--line);
-    background:var(--surface);
-    color:var(--text-dim);
-    font-size:14px;
-    font-weight:600;
   }
-  .chip.active{
-    background:var(--milk);
-    color:#241d0a;
-    border-color:var(--milk);
+  .hero-value{
+    font-size:44px;
+    font-weight:800;
+    letter-spacing:-0.02em;
+    font-variant-numeric:tabular-nums;
+    color:var(--milk);
+    line-height:1.05;
+  }
+  .hero-label{
+    font-size:13px;
+    color:var(--text-dim);
+    margin-top:6px;
+    font-weight:500;
   }
 
   /* status strip */
   .statusrow{
     display:flex;
     gap:10px;
-    margin-bottom:18px;
+    margin-bottom:20px;
   }
   .statuscard{
     flex:1;
     background:var(--surface);
     border-radius:var(--radius-sm);
-    padding:14px 12px;
+    padding:16px 14px;
     border:1px solid var(--line);
   }
-  .statuscard .n{ font-size:22px; font-weight:700; line-height:1.1; }
-  .statuscard .l{ font-size:11.5px; color:var(--text-dim); margin-top:4px; }
+  .statuscard .n{ font-size:21px; font-weight:700; line-height:1.15; font-variant-numeric:tabular-nums; letter-spacing:-0.01em; }
+  .statuscard .l{ font-size:11.5px; color:var(--text-dim); margin-top:5px; line-height:1.3; }
 
   /* big action buttons */
   .actions{ display:flex; gap:12px; margin-bottom:22px; }
@@ -124,14 +121,16 @@
     font-size:13px;
     color:var(--text-dim);
     font-weight:600;
-    margin:22px 0 10px 0;
+    margin:28px 0 12px 0;
+    padding-bottom:10px;
+    border-bottom:1px solid var(--line);
   }
 
   .entry{
     display:flex;
     align-items:center;
     gap:12px;
-    padding:12px 4px;
+    padding:13px 4px;
     border-bottom:1px solid var(--line);
   }
   .entry:last-child{ border-bottom:none; }
@@ -141,9 +140,9 @@
   .dot.dirty{ background:var(--dirty); }
   .dot.both{ background:var(--both); }
   .entry .main{ flex:1; }
-  .entry .title{ font-size:14.5px; font-weight:600; }
+  .entry .title{ font-size:14.5px; font-weight:600; font-variant-numeric:tabular-nums; }
   .entry .sub{ font-size:12.5px; color:var(--text-dim); margin-top:1px; }
-  .entry .time{ font-size:12.5px; color:var(--text-dim); text-align:right; }
+  .entry .time{ font-size:12px; color:var(--text-dim); text-align:right; line-height:1.4; font-variant-numeric:tabular-nums; }
   .entry.editable{ cursor:pointer; }
   .entry.editable:active{ background:var(--surface-2); }
   .entry .chev{ color:var(--text-dim); font-size:18px; margin-left:2px; }
@@ -152,7 +151,7 @@
     text-align:center;
     color:var(--text-dim);
     font-size:14px;
-    padding:30px 10px;
+    padding:34px 10px;
     background:var(--surface);
     border-radius:var(--radius-sm);
     border:1px dashed var(--line);
@@ -193,8 +192,8 @@
     border-radius:var(--radius-sm);
     padding:16px;
   }
-  .statbig .v{ font-size:26px; font-weight:700; }
-  .statbig .k{ font-size:12px; color:var(--text-dim); margin-top:4px; }
+  .statbig .v{ font-size:25px; font-weight:700; letter-spacing:-0.01em; font-variant-numeric:tabular-nums; }
+  .statbig .k{ font-size:12px; color:var(--text-dim); margin-top:5px; line-height:1.3; }
 
   .chartcard{
     background:var(--surface);
@@ -361,17 +360,87 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzg80UZ8CATTR91HqWhezRG
 // automated abuse, not real security — see the Settings tab note.
 const API_KEY = "9G-nekyWDuGTE5sJNULr4wPigZUeMEqR";
 
+// Her date of birth, used to compute age for the growth percentile chart.
+const BIRTH_DATE = new Date('2026-07-10T00:00:00');
+
+/* ---------------- WHO growth standard reference (girls, weight-for-age) ----------------
+   Approximate WHO Child Growth Standard percentile values (kg) for girls,
+   birth to 24 completed months, at the 3rd/15th/50th/85th/97th percentiles.
+   This is a general-awareness reference, not a diagnostic tool — always
+   confirm growth concerns with a pediatrician, who uses the exact WHO tables. */
+const WHO_WFA_GIRLS = [
+  {m:0,  p3:2.4, p15:2.8, p50:3.2, p85:3.7, p97:4.2},
+  {m:1,  p3:3.2, p15:3.6, p50:4.2, p85:4.8, p97:5.5},
+  {m:2,  p3:3.9, p15:4.5, p50:5.1, p85:5.8, p97:6.6},
+  {m:3,  p3:4.5, p15:5.2, p50:5.8, p85:6.6, p97:7.5},
+  {m:4,  p3:5.0, p15:5.7, p50:6.4, p85:7.3, p97:8.2},
+  {m:5,  p3:5.4, p15:6.1, p50:6.9, p85:7.8, p97:8.8},
+  {m:6,  p3:5.7, p15:6.5, p50:7.3, p85:8.2, p97:9.3},
+  {m:7,  p3:5.9, p15:6.8, p50:7.6, p85:8.6, p97:9.8},
+  {m:8,  p3:6.2, p15:7.0, p50:7.9, p85:8.9, p97:10.2},
+  {m:9,  p3:6.4, p15:7.3, p50:8.2, p85:9.3, p97:10.5},
+  {m:10, p3:6.6, p15:7.5, p50:8.5, p85:9.6, p97:10.9},
+  {m:11, p3:6.8, p15:7.7, p50:8.7, p85:9.9, p97:11.2},
+  {m:12, p3:6.9, p15:7.9, p50:8.9, p85:10.1, p97:11.5},
+  {m:13, p3:7.1, p15:8.1, p50:9.2, p85:10.4, p97:11.8},
+  {m:14, p3:7.3, p15:8.3, p50:9.4, p85:10.6, p97:12.1},
+  {m:15, p3:7.5, p15:8.5, p50:9.6, p85:10.9, p97:12.4},
+  {m:16, p3:7.6, p15:8.7, p50:9.8, p85:11.1, p97:12.6},
+  {m:17, p3:7.8, p15:8.9, p50:10.0, p85:11.4, p97:12.9},
+  {m:18, p3:7.9, p15:9.1, p50:10.2, p85:11.6, p97:13.2},
+  {m:19, p3:8.1, p15:9.2, p50:10.4, p85:11.8, p97:13.5},
+  {m:20, p3:8.3, p15:9.4, p50:10.6, p85:12.1, p97:13.7},
+  {m:21, p3:8.4, p15:9.6, p50:10.9, p85:12.3, p97:14.0},
+  {m:22, p3:8.6, p15:9.8, p50:11.0, p85:12.5, p97:14.3},
+  {m:23, p3:8.7, p15:9.9, p50:11.2, p85:12.8, p97:14.6},
+  {m:24, p3:8.9, p15:10.1,p50:11.5, p85:13.0, p97:14.8}
+];
+const LB_TO_KG = 0.45359237;
+
+function ageInMonths(ts){
+  const days = (ts.getTime() - BIRTH_DATE.getTime()) / 86400000;
+  return days / 30.4368;
+}
+function interpolateWhoRow(months){
+  const clamped = Math.max(0, Math.min(24, months));
+  const lo = Math.floor(clamped), hi = Math.ceil(clamped);
+  const a = WHO_WFA_GIRLS[lo], b = WHO_WFA_GIRLS[hi];
+  if(lo===hi) return a;
+  const t = clamped - lo;
+  const lerp = (k)=> a[k] + (b[k]-a[k])*t;
+  return {p3:lerp('p3'), p15:lerp('p15'), p50:lerp('p50'), p85:lerp('p85'), p97:lerp('p97')};
+}
+function estimatePercentile(weightKg, months){
+  const row = interpolateWhoRow(months);
+  const points = [[3,row.p3],[15,row.p15],[50,row.p50],[85,row.p85],[97,row.p97]];
+  if(weightKg <= points[0][1]) return '<3rd';
+  if(weightKg >= points[points.length-1][1]) return '>97th';
+  for(let i=1;i<points.length;i++){
+    const [pLo,vLo] = points[i-1], [pHi,vHi] = points[i];
+    if(weightKg <= vHi){
+      const t = (weightKg - vLo) / (vHi - vLo);
+      return Math.round(pLo + (pHi-pLo)*t) + suffix(Math.round(pLo + (pHi-pLo)*t));
+    }
+  }
+  return '—';
+}
+function suffix(n){
+  if(n%100>=11 && n%100<=13) return 'th';
+  switch(n%10){ case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; }
+}
+
 /* ---------------- state ---------------- */
 const state = {
   config: null,           // {unit}
   feedings: [],
   diapers: [],
+  weights: [],
   loaded: false,
   loading: false,
   loadError: null,
   tab: 'home',
   period: 24,             // hours: 24, 168, 720
-  modal: null,            // 'feed' | 'diaper' | null
+  modal: null,            // 'feed' | 'diaper' | 'weight' | null
   editingId: null         // id of the entry being edited, or null when adding new
 };
 
@@ -394,17 +463,21 @@ function genId(){ return Date.now().toString(36) + Math.random().toString(36).sl
 async function fetchAll(){
   state.loading = true; state.loadError = null; render();
   try{
-    const [fRes, dRes] = await Promise.all([
+    const [fRes, dRes, wRes] = await Promise.all([
       fetch(sheetBase() + '?sheet=Feedings&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
-      fetch(sheetBase() + '?sheet=Diapers&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now())
+      fetch(sheetBase() + '?sheet=Diapers&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
+      fetch(sheetBase() + '?sheet=Weights&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now())
     ]);
     const fJson = await fRes.json();
     const dJson = await dRes.json();
-    if(fJson.error || dJson.error) throw new Error(fJson.error || dJson.error);
+    const wJson = await wRes.json();
+    if(fJson.error || dJson.error || wJson.error) throw new Error(fJson.error || dJson.error || wJson.error);
     state.feedings = (Array.isArray(fJson)?fJson:[]).map(normalizeFeed).filter(x=>x.ts);
     state.diapers = (Array.isArray(dJson)?dJson:[]).map(normalizeDiaper).filter(x=>x.ts);
+    state.weights = (Array.isArray(wJson)?wJson:[]).map(normalizeWeight).filter(x=>x.ts);
     state.feedings.sort((a,b)=>b.ts-a.ts);
     state.diapers.sort((a,b)=>b.ts-a.ts);
+    state.weights.sort((a,b)=>b.ts-a.ts);
     state.loaded = true;
   }catch(e){
     state.loadError = "Couldn't reach the sheet. Check that the Web App is deployed with access set to Anyone.";
@@ -419,6 +492,10 @@ function normalizeFeed(row){
 function normalizeDiaper(row){
   const ts = new Date(row.Timestamp);
   return { id: row.Id || '', ts: isNaN(ts) ? null : ts, type: row.Type||'wet' };
+}
+function normalizeWeight(row){
+  const ts = new Date(row.Timestamp);
+  return { id: row.Id || '', ts: isNaN(ts) ? null : ts, weightKg: Number(row.Weight)||0 };
 }
 
 async function postRow(sheet, body){
@@ -449,6 +526,16 @@ async function logDiaper(type, dateObj){
   await postRow('Diapers', { action:'add', id, timestamp: dateObj.toISOString(), type, loggedBy: '' });
   fetchAll();
 }
+async function logWeight(weightKg, dateObj){
+  const id = genId();
+  const row = { id, ts: dateObj, weightKg };
+  state.weights.unshift(row);
+  state.weights.sort((a,b)=>b.ts-a.ts);
+  state.modal = null;
+  render();
+  await postRow('Weights', { action:'add', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' });
+  fetchAll();
+}
 
 async function updateFeed(id, amount, unit, dateObj){
   const entry = state.feedings.find(f=>f.id===id);
@@ -468,6 +555,15 @@ async function updateDiaper(id, type, dateObj){
   await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type, loggedBy: '' });
   fetchAll();
 }
+async function updateWeight(id, weightKg, dateObj){
+  const entry = state.weights.find(w=>w.id===id);
+  if(entry){ entry.weightKg = weightKg; entry.ts = dateObj; }
+  state.weights.sort((a,b)=>b.ts-a.ts);
+  state.modal = null; state.editingId = null;
+  render();
+  await postRow('Weights', { action:'update', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' });
+  fetchAll();
+}
 
 async function deleteFeed(id){
   state.feedings = state.feedings.filter(f=>f.id!==id);
@@ -481,6 +577,13 @@ async function deleteDiaper(id){
   state.modal = null; state.editingId = null;
   render();
   await postRow('Diapers', { action:'delete', id });
+  fetchAll();
+}
+async function deleteWeight(id){
+  state.weights = state.weights.filter(w=>w.id!==id);
+  state.modal = null; state.editingId = null;
+  render();
+  await postRow('Weights', { action:'delete', id });
   fetchAll();
 }
 
@@ -532,11 +635,16 @@ function render(){
     </div>
     ${state.modal==='feed' ? renderFeedModal() : ''}
     ${state.modal==='diaper' ? renderDiaperModal() : ''}
+    ${state.modal==='weight' ? renderWeightModal() : ''}
   `;
   attachHandlers();
   if(state.modal==='feed'){
     const amtEl = document.getElementById('feed-amt-input');
     if(amtEl){ amtEl.focus(); amtEl.select(); }
+  }
+  if(state.modal==='weight'){
+    const wEl = document.getElementById('weight-amt-input');
+    if(wEl){ wEl.focus(); wEl.select(); }
   }
 }
 function tabBtn(id, icon, label){
@@ -550,9 +658,7 @@ function escapeAttr(s){ return escapeHtml(s); }
 /* ---------------- home ---------------- */
 function renderHome(){
   const lastFeed = state.feedings[0];
-  const lastDiaper = state.diapers[0];
   const feedsToday = state.feedings.filter(f=>withinHours(f.ts,24));
-  const diapersToday = state.diapers.filter(d=>withinHours(d.ts,24)).length;
   const mlToday = Math.round(feedsToday.reduce((s,f)=>s+toMl(f.amount,f.unit),0));
 
   const recent = [...state.feedings.map(f=>({...f,kind:'feed'})), ...state.diapers.map(d=>({...d,kind:'diaper'}))]
@@ -562,15 +668,9 @@ function renderHome(){
   return `
     ${state.loadError ? bannerErr() : ''}
     ${(!state.loaded && state.loading) ? bannerLoading() : ''}
-    <div class="statusrow">
-      <div class="statuscard">
-        <div class="n">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
-        <div class="l">since last feed</div>
-      </div>
-      <div class="statuscard">
-        <div class="n">${lastDiaper ? timeSince(lastDiaper.ts) : '—'}</div>
-        <div class="l">since last diaper</div>
-      </div>
+    <div class="hero">
+      <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
+      <div class="hero-label">since last feed</div>
     </div>
     <div class="actions">
       <button class="actionbtn feed" data-open="feed">
@@ -583,10 +683,9 @@ function renderHome(){
     <div class="statusrow">
       <div class="statuscard"><div class="n">${feedsToday.length}</div><div class="l">feeds, last 24h</div></div>
       <div class="statuscard"><div class="n">${mlToday}</div><div class="l">mL, last 24h</div></div>
-      <div class="statuscard"><div class="n">${diapersToday}</div><div class="l">diapers, last 24h</div></div>
     </div>
     <div style="display:flex; align-items:center; justify-content:space-between;">
-      <div class="sectiontitle" style="margin-top:0;">Recent activity</div>
+      <div class="sectiontitle" style="margin-top:0; flex:1; border-bottom:none; padding-bottom:0;">Recent activity</div>
       <button class="refreshbtn" id="refresh-home">↻ Refresh</button>
     </div>
     ${recent.length===0 ? `<div class="empty">Nothing logged yet. Tap a button above to start.</div>` :
@@ -696,6 +795,45 @@ function renderTrends(){
         <span><i style="background:var(--both)"></i>both</span>
       </div>
     </div>
+    ${renderGrowthSection()}
+  `;
+}
+
+function renderGrowthSection(){
+  const latest = state.weights[0];
+  let percentileLine = 'No weigh-ins logged yet.';
+  if(latest){
+    const months = ageInMonths(latest.ts);
+    const pct = estimatePercentile(latest.weightKg, months);
+    percentileLine = `${latest.weightKg.toFixed(2)} kg at ${months.toFixed(1)} months — approximately the <strong>${pct}</strong> percentile`;
+  }
+  const sorted = [...state.weights].sort((a,b)=>b.ts-a.ts);
+  return `
+    <div class="sectiontitle">Growth — weight for age</div>
+    <div class="chartcard">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <h3 style="margin:0;">Vs. WHO reference (girls)</h3>
+        <button class="btn primary" id="open-weight" style="flex:none; padding:9px 16px; font-size:13px;">+ Log weight</button>
+      </div>
+      <div class="chartwrap" style="height:220px;"><canvas id="weightChart"></canvas></div>
+      <div class="legend">
+        <span><i style="background:#4b4d63"></i>3rd–97th pctile band</span>
+        <span><i style="background:var(--milk)"></i>her weight</span>
+      </div>
+      <p style="font-size:13px; color:var(--text-dim); margin:14px 0 0 0; line-height:1.5;">${percentileLine}</p>
+      <p style="font-size:11.5px; color:var(--text-dim); margin:10px 0 0 0; line-height:1.5;">Reference curves are an approximate WHO growth standard for general awareness only — not a diagnosis. Always check growth concerns with your pediatrician.</p>
+    </div>
+    ${sorted.length ? `
+    <div class="chartcard" style="padding:6px 14px;">
+      ${sorted.map(w=>`
+        <div class="entry editable" data-edit="weight" data-id="${escapeAttr(w.id)}">
+          <div class="dot feed"></div>
+          <div class="main"><div class="title">${w.weightKg.toFixed(2)} kg</div></div>
+          <div class="time">${fmtDay(w.ts)}<br>${fmtTime(w.ts)}</div>
+          ${w.id ? `<div class="chev">›</div>` : ''}
+        </div>
+      `).join('')}
+    </div>` : ''}
   `;
 }
 
@@ -750,6 +888,42 @@ function drawCharts(){
       scales:{
         x:{ stacked:true, grid:{ display:false }, ticks:{ color:tickColor, font:{size:10.5} } },
         y:{ stacked:true, grid:{ color:gridColor }, ticks:{ color:tickColor, font:{size:10.5} }, beginAtZero:true }
+      }
+    }
+  });
+
+  drawWeightChart();
+}
+
+let weightChartInstance = null;
+function drawWeightChart(){
+  const canvas = document.getElementById('weightChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+  if(weightChartInstance) weightChartInstance.destroy();
+
+  const gridColor = 'rgba(255,255,255,0.06)';
+  const tickColor = '#9C9DB2';
+  const refLine = (key,color)=>({
+    label:key, data: WHO_WFA_GIRLS.map(r=>({x:r.m, y:r[key]})),
+    borderColor:color, borderWidth: key==='p50' ? 1.5 : 1,
+    borderDash: key==='p50' ? [] : [4,3],
+    pointRadius:0, fill:false, tension:0.3
+  });
+  const herData = [...state.weights].sort((a,b)=>a.ts-b.ts).map(w=>({x: ageInMonths(w.ts), y: w.weightKg}));
+
+  weightChartInstance = new Chart(canvas, {
+    type:'line',
+    data:{ datasets:[
+      refLine('p3','#4b4d63'), refLine('p15','#5c5e78'), refLine('p50','#7d7fa0'),
+      refLine('p85','#5c5e78'), refLine('p97','#4b4d63'),
+      { label:'her weight', data:herData, borderColor:'#F2C879', backgroundColor:'#F2C879', borderWidth:2.5, pointRadius:4, pointBackgroundColor:'#F2C879', fill:false, tension:0.2 }
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ type:'linear', min:0, max:24, title:{display:true, text:'Age (months)', color:tickColor, font:{size:11}}, grid:{ color:gridColor }, ticks:{ color:tickColor, font:{size:10.5}, stepSize:6 } },
+        y:{ grid:{ color:gridColor }, ticks:{ color:tickColor, font:{size:10.5} }, title:{display:true, text:'kg', color:tickColor, font:{size:11}} }
       }
     }
   });
@@ -876,6 +1050,55 @@ function openEditDiaper(id){
   state.modal = 'diaper'; render();
 }
 
+/* ---------------- weight modal ---------------- */
+let weightAmount = 0;
+let weightUnit = 'kg';
+let weightTimeValue = null;
+
+function renderWeightModal(){
+  const editing = !!state.editingId;
+  const timeVal = weightTimeValue || nowLocalInputValue();
+  const amtDisplay = (weightAmount === 0 && !editing) ? '' : weightAmount;
+  return `
+  <div class="modalbg" id="modal-bg-weight">
+    <div class="modal">
+      <h2>${editing ? 'Edit weigh-in' : 'Log weight'}</h2>
+      <div class="field">
+        <label>Weight</label>
+        <input type="number" inputmode="decimal" id="weight-amt-input" class="amtinput" value="${amtDisplay}" placeholder="0" min="0" step="0.01">
+      </div>
+      <div class="field">
+        <label>Unit</label>
+        <div class="unittoggle" id="weight-unit-toggle">
+          <button class="${weightUnit==='kg'?'active':''}" data-u="kg">kg</button>
+          <button class="${weightUnit==='lb'?'active':''}" data-u="lb">lb</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="datetime-local" id="weight-time" value="${timeVal}">
+      </div>
+      <div class="modalbtns">
+        <button class="btn ghost" id="weight-cancel">Cancel</button>
+        <button class="btn primary" id="weight-save">Save</button>
+      </div>
+      ${editing ? `<button class="btn ghost" id="weight-delete" style="width:100%; margin-top:10px; color:var(--danger);">Delete this entry</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function openAddWeight(){
+  state.editingId = null; weightAmount = 0; weightUnit = 'kg'; weightTimeValue = null;
+  state.modal = 'weight'; render();
+}
+function openEditWeight(id){
+  const entry = state.weights.find(w=>w.id===id);
+  if(!entry) return;
+  state.editingId = id; weightAmount = entry.weightKg; weightUnit = 'kg';
+  weightTimeValue = localInputValue(entry.ts);
+  state.modal = 'weight'; render();
+}
+
 /* ---------------- event wiring ---------------- */
 function attachHandlers(){
   document.querySelectorAll('[data-tab]').forEach(b=>{
@@ -963,12 +1186,52 @@ function attachHandlers(){
     if(confirm('Delete this diaper entry?')) await deleteDiaper(state.editingId);
   };
 
+  /* weight modal */
+  const openWeightBtn = document.getElementById('open-weight');
+  if(openWeightBtn) openWeightBtn.onclick = openAddWeight;
+  const weightAmtInput = document.getElementById('weight-amt-input');
+  if(weightAmtInput) weightAmtInput.oninput = ()=>{ weightAmount = Number(weightAmtInput.value) || 0; };
+  document.querySelectorAll('#weight-unit-toggle button').forEach(b=>{
+    b.onclick = ()=>{
+      const timeEl = document.getElementById('weight-time');
+      if(timeEl) weightTimeValue = timeEl.value;
+      const amtEl = document.getElementById('weight-amt-input');
+      const raw = amtEl ? Number(amtEl.value)||0 : weightAmount;
+      // convert the currently-entered number between kg/lb when switching
+      if(b.dataset.u==='lb' && weightUnit==='kg') weightAmount = raw / LB_TO_KG;
+      else if(b.dataset.u==='kg' && weightUnit==='lb') weightAmount = raw * LB_TO_KG;
+      weightUnit = b.dataset.u;
+      render();
+    };
+  });
+  const weightCancel = document.getElementById('weight-cancel');
+  if(weightCancel) weightCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); };
+  const weightSave = document.getElementById('weight-save');
+  if(weightSave) weightSave.onclick = async ()=>{
+    const t = document.getElementById('weight-time').value;
+    const dateObj = t ? new Date(t) : new Date();
+    const raw = Number(document.getElementById('weight-amt-input').value) || 0;
+    const kg = weightUnit==='lb' ? raw * LB_TO_KG : raw;
+    if(state.editingId){
+      await updateWeight(state.editingId, kg, dateObj);
+    }else{
+      await logWeight(kg, dateObj);
+    }
+    weightAmount = 0;
+  };
+  const weightDelete = document.getElementById('weight-delete');
+  if(weightDelete) weightDelete.onclick = async ()=>{
+    if(confirm('Delete this weigh-in?')) await deleteWeight(state.editingId);
+  };
+
   /* tap an entry row to edit it */
   document.querySelectorAll('[data-edit]').forEach(row=>{
     row.onclick = ()=>{
       const kind = row.dataset.edit;
       const id = row.dataset.id;
-      if(kind==='feed') openEditFeed(id); else openEditDiaper(id);
+      if(kind==='feed') openEditFeed(id);
+      else if(kind==='weight') openEditWeight(id);
+      else openEditDiaper(id);
     };
   });
 }
