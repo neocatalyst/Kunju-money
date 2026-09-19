@@ -11,6 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root{
+    color-scheme: dark;
     --bg: #15161F;
     --surface: #1E202C;
     --surface-2: #262838;
@@ -263,6 +264,7 @@
   .modal h2{ font-size:19px; margin:0 0 20px 0; letter-spacing:-0.01em; }
   .field{ margin-bottom:18px; }
   .field label{ font-size:12.5px; color:var(--text-dim); display:block; margin-bottom:8px; font-weight:600; }
+  .fieldhint{ font-weight:400; color:var(--text-dim); opacity:0.8; }
   .amtrow{ display:flex; align-items:center; gap:12px; }
   .amtbtn{
     width:42px; height:42px; border-radius:50%;
@@ -290,12 +292,13 @@
     background:var(--surface-2); color:var(--text-dim); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
   }
   .unittoggle button.active{ background:var(--milk); color:#241d0a; border-color:var(--milk); }
-  input[type=datetime-local], input[type=text]{
+  input[type=datetime-local], input[type=text], input[type=time], input[type=date]{
     width:100%; padding:13px 14px; border-radius:var(--radius-sm);
     border:1.5px solid var(--line); background:var(--surface-2); color:var(--text);
     font-family:inherit; font-size:16px;
+    color-scheme:dark;
   }
-  input[type=datetime-local]:focus, input[type=text]:focus{ outline:none; border-color:var(--milk); }
+  input[type=datetime-local]:focus, input[type=text]:focus, input[type=time]:focus, input[type=date]:focus{ outline:none; border-color:var(--milk); }
   .typegrid{ display:flex; gap:10px; }
   .typegrid button{
     flex:1; padding:18px 8px; border-radius:var(--radius-sm); border:1.5px solid var(--line);
@@ -988,60 +991,47 @@ function drawWeightChart(canvasId, expanded){
 
 /* ---------------- settings ---------------- */
 function renderSettings(){
-  const c = state.config;
   return `
-    <div class="settingsblock">
-      <h3>Default feed unit</h3>
-      <div class="unittoggle" id="st-unit">
-        <button class="${c.unit==='oz'?'active':''}" data-unit="oz">oz</button>
-        <button class="${c.unit==='ml'?'active':''}" data-unit="ml">ml</button>
-      </div>
-    </div>
-    <button class="btn primary" id="st-save" style="width:100%; padding:15px; margin-bottom:10px;">Save changes</button>
     <button class="btn ghost" id="st-refresh" style="width:100%; padding:15px;">Refresh data from sheet</button>
     <div class="help" style="margin-top:16px;">Kunju Money — a two-person feeding & diaper tracker, backed by your own Google Sheet.</div>
   `;
 }
 
 /* ---------------- modals ---------------- */
-function localInputValue(d){
-  const c = new Date(d);
-  c.setMinutes(c.getMinutes() - c.getTimezoneOffset());
-  return c.toISOString().slice(0,16);
+function timeStrFromDate(d){
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  return `${hh}:${mm}`;
 }
-function nowLocalInputValue(){ return localInputValue(new Date()); }
+function combineDateTime(baseDate, timeStr){
+  const [h,m] = (timeStr||'00:00').split(':').map(Number);
+  const d = new Date(baseDate);
+  d.setHours(h||0, m||0, 0, 0);
+  return d;
+}
 
 let feedAmount = 0;
-let feedUnit = null;
-let feedTimeValue = null;
+let feedBaseDate = null;
+let feedTimeStr = null;
 
 function renderFeedModal(){
-  if(feedUnit===null) feedUnit = state.config.unit || 'ml';
   const editing = !!state.editingId;
-  const timeVal = feedTimeValue || nowLocalInputValue();
   const amtDisplay = (feedAmount === 0 && !editing) ? '' : feedAmount;
-  const presets = feedUnit === 'oz' ? [1,2,3,4,5,6] : [30,60,90,120,150,180];
+  const presets = [30,60,90,120];
   return `
   <div class="modalbg" id="modal-bg-feed">
     <div class="modal">
       <h2>${editing ? 'Edit bottle' : 'Log bottle'}</h2>
       <div class="field">
-        <label>Amount</label>
+        <label>Amount (mL)</label>
         <input type="number" inputmode="decimal" id="feed-amt-input" class="amtinput" value="${amtDisplay}" placeholder="0" min="0" step="1">
         <div class="presetrow">
           ${presets.map(p=>`<button type="button" class="presetchip" data-preset="${p}">${p}</button>`).join('')}
         </div>
       </div>
       <div class="field">
-        <label>Unit</label>
-        <div class="unittoggle" id="feed-unit-toggle">
-          <button class="${feedUnit==='ml'?'active':''}" data-u="ml">ml</button>
-          <button class="${feedUnit==='oz'?'active':''}" data-u="oz">oz</button>
-        </div>
-      </div>
-      <div class="field">
-        <label>Time</label>
-        <input type="datetime-local" id="feed-time" value="${timeVal}">
+        <label>Time <span class="fieldhint">— ${fmtDay(feedBaseDate)}</span></label>
+        <input type="time" id="feed-time" value="${feedTimeStr}">
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="feed-cancel">Cancel</button>
@@ -1053,11 +1043,11 @@ function renderFeedModal(){
 }
 
 let diaperType = 'wet';
-let diaperTimeValue = null;
+let diaperBaseDate = null;
+let diaperTimeStr = null;
 
 function renderDiaperModal(){
   const editing = !!state.editingId;
-  const timeVal = diaperTimeValue || nowLocalInputValue();
   return `
   <div class="modalbg" id="modal-bg-diaper">
     <div class="modal">
@@ -1071,8 +1061,8 @@ function renderDiaperModal(){
         </div>
       </div>
       <div class="field">
-        <label>Time</label>
-        <input type="datetime-local" id="diaper-time" value="${timeVal}">
+        <label>Time <span class="fieldhint">— ${fmtDay(diaperBaseDate)}</span></label>
+        <input type="time" id="diaper-time" value="${diaperTimeStr}">
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="diaper-cancel">Cancel</button>
@@ -1085,36 +1075,41 @@ function renderDiaperModal(){
 
 function openAddFeed(){
   state.editingId = null; feedAmount = 0;
-  feedUnit = state.config.unit || 'ml'; feedTimeValue = null;
+  feedBaseDate = new Date(); feedTimeStr = timeStrFromDate(feedBaseDate);
   state.modal = 'feed'; render();
 }
 function openEditFeed(id){
   const entry = state.feedings.find(f=>f.id===id);
   if(!entry) return;
-  state.editingId = id; feedAmount = entry.amount; feedUnit = entry.unit;
-  feedTimeValue = localInputValue(entry.ts);
+  state.editingId = id; feedAmount = entry.amount;
+  feedBaseDate = entry.ts; feedTimeStr = timeStrFromDate(entry.ts);
   state.modal = 'feed'; render();
 }
 function openAddDiaper(){
-  state.editingId = null; diaperType = 'wet'; diaperTimeValue = null;
+  state.editingId = null; diaperType = 'wet';
+  diaperBaseDate = new Date(); diaperTimeStr = timeStrFromDate(diaperBaseDate);
   state.modal = 'diaper'; render();
 }
 function openEditDiaper(id){
   const entry = state.diapers.find(d=>d.id===id);
   if(!entry) return;
   state.editingId = id; diaperType = entry.type;
-  diaperTimeValue = localInputValue(entry.ts);
+  diaperBaseDate = entry.ts; diaperTimeStr = timeStrFromDate(entry.ts);
   state.modal = 'diaper'; render();
 }
 
 /* ---------------- weight modal ---------------- */
+function dateStrFromDate(d){
+  const c = new Date(d);
+  c.setMinutes(c.getMinutes() - c.getTimezoneOffset());
+  return c.toISOString().slice(0,10);
+}
 let weightAmount = 0;
 let weightUnit = 'kg';
-let weightTimeValue = null;
+let weightDateStr = null;
 
 function renderWeightModal(){
   const editing = !!state.editingId;
-  const timeVal = weightTimeValue || nowLocalInputValue();
   const amtDisplay = (weightAmount === 0 && !editing) ? '' : weightAmount;
   return `
   <div class="modalbg" id="modal-bg-weight">
@@ -1133,7 +1128,7 @@ function renderWeightModal(){
       </div>
       <div class="field">
         <label>Date</label>
-        <input type="datetime-local" id="weight-time" value="${timeVal}">
+        <input type="date" id="weight-time" value="${weightDateStr}">
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="weight-cancel">Cancel</button>
@@ -1145,14 +1140,15 @@ function renderWeightModal(){
 }
 
 function openAddWeight(){
-  state.editingId = null; weightAmount = 0; weightUnit = 'kg'; weightTimeValue = null;
+  state.editingId = null; weightAmount = 0; weightUnit = 'kg';
+  weightDateStr = dateStrFromDate(new Date());
   state.modal = 'weight'; render();
 }
 function openEditWeight(id){
   const entry = state.weights.find(w=>w.id===id);
   if(!entry) return;
   state.editingId = id; weightAmount = entry.weightKg; weightUnit = 'kg';
-  weightTimeValue = localInputValue(entry.ts);
+  weightDateStr = dateStrFromDate(entry.ts);
   state.modal = 'weight'; render();
 }
 
@@ -1172,33 +1168,13 @@ function attachHandlers(){
   const stRefresh = document.getElementById('st-refresh');
   if(stRefresh) stRefresh.onclick = fetchAll;
 
-  const stSave = document.getElementById('st-save');
-  if(stSave) stSave.onclick = async ()=>{
-    const unitBtn = document.querySelector('#st-unit .active');
-    const cfg = { unit: unitBtn ? unitBtn.dataset.unit : 'ml' };
-    await saveConfig(cfg);
-    render();
-    fetchAll();
-  };
-  document.querySelectorAll('#st-unit button').forEach(b=>{
-    b.onclick = ()=>{ document.querySelectorAll('#st-unit button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); };
-  });
-
   /* feed modal */
   const feedAmtInput = document.getElementById('feed-amt-input');
   if(feedAmtInput) feedAmtInput.oninput = ()=>{ feedAmount = Number(feedAmtInput.value) || 0; };
-  document.querySelectorAll('#feed-unit-toggle button').forEach(b=>{
-    b.onclick = ()=>{
-      const timeEl = document.getElementById('feed-time');
-      if(timeEl) feedTimeValue = timeEl.value;
-      feedUnit = b.dataset.u;
-      render();
-    };
-  });
   document.querySelectorAll('.presetchip').forEach(b=>{
     b.onclick = ()=>{
       const timeEl = document.getElementById('feed-time');
-      if(timeEl) feedTimeValue = timeEl.value;
+      if(timeEl) feedTimeStr = timeEl.value;
       feedAmount = Number(b.dataset.preset);
       render();
     };
@@ -1208,12 +1184,12 @@ function attachHandlers(){
   const feedSave = document.getElementById('feed-save');
   if(feedSave) feedSave.onclick = async ()=>{
     const t = document.getElementById('feed-time').value;
-    const dateObj = t ? new Date(t) : new Date();
+    const dateObj = combineDateTime(feedBaseDate, t);
     const amt = Number(document.getElementById('feed-amt-input').value) || 0;
     if(state.editingId){
-      await updateFeed(state.editingId, amt, feedUnit, dateObj);
+      await updateFeed(state.editingId, amt, 'ml', dateObj);
     }else{
-      await logFeed(amt, feedUnit, dateObj);
+      await logFeed(amt, 'ml', dateObj);
     }
     feedAmount = 0;
   };
@@ -1231,7 +1207,7 @@ function attachHandlers(){
   const diaperSave = document.getElementById('diaper-save');
   if(diaperSave) diaperSave.onclick = async ()=>{
     const t = document.getElementById('diaper-time').value;
-    const dateObj = t ? new Date(t) : new Date();
+    const dateObj = combineDateTime(diaperBaseDate, t);
     if(state.editingId){
       await updateDiaper(state.editingId, diaperType, dateObj);
     }else{
@@ -1254,8 +1230,6 @@ function attachHandlers(){
   if(weightAmtInput) weightAmtInput.oninput = ()=>{ weightAmount = Number(weightAmtInput.value) || 0; };
   document.querySelectorAll('#weight-unit-toggle button').forEach(b=>{
     b.onclick = ()=>{
-      const timeEl = document.getElementById('weight-time');
-      if(timeEl) weightTimeValue = timeEl.value;
       const amtEl = document.getElementById('weight-amt-input');
       const raw = amtEl ? Number(amtEl.value)||0 : weightAmount;
       // convert the currently-entered number between kg/lb when switching
@@ -1269,8 +1243,8 @@ function attachHandlers(){
   if(weightCancel) weightCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); };
   const weightSave = document.getElementById('weight-save');
   if(weightSave) weightSave.onclick = async ()=>{
-    const t = document.getElementById('weight-time').value;
-    const dateObj = t ? new Date(t) : new Date();
+    const dstr = document.getElementById('weight-time').value;
+    const dateObj = new Date(dstr + 'T12:00:00');
     const raw = Number(document.getElementById('weight-amt-input').value) || 0;
     const kg = weightUnit==='lb' ? raw * LB_TO_KG : raw;
     if(state.editingId){
