@@ -524,7 +524,8 @@ const state = {
   tab: 'home',
   period: 24,             // hours: 24, 168, 720
   modal: null,            // 'feed' | 'diaper' | 'weight' | null
-  editingId: null         // id of the entry being edited, or null when adding new
+  editingId: null,        // id of the entry being edited, or null when adding new
+  recentWindowDays: 2     // how far back "Recent activity" on Home currently shows
 };
 
 /* ---------------- storage (per-device, plain localStorage) ---------------- */
@@ -542,6 +543,7 @@ async function saveConfig(cfg){
 /* ---------------- data fetch / write ---------------- */
 function sheetBase(){ return API_URL; }
 function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function scrollToTop(){ window.scrollTo(0, 0); }
 
 const CACHE_KEY = 'kunju_data_cache';
 
@@ -630,7 +632,7 @@ async function logFeed(amount, unit, dateObj){
   state.feedings.unshift(row);
   state.feedings.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
-  render();
+  render(); scrollToTop();
   await postRow('Feedings', { action:'add', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' });
   fetchAll();
 }
@@ -640,7 +642,7 @@ async function logDiaper(type, dateObj){
   state.diapers.unshift(row);
   state.diapers.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
-  render();
+  render(); scrollToTop();
   await postRow('Diapers', { action:'add', id, timestamp: dateObj.toISOString(), type, loggedBy: '' });
   fetchAll();
 }
@@ -650,7 +652,7 @@ async function logWeight(weightKg, dateObj){
   state.weights.unshift(row);
   state.weights.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
-  render();
+  render(); scrollToTop();
   await postRow('Weights', { action:'add', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' });
   fetchAll();
 }
@@ -660,7 +662,7 @@ async function updateFeed(id, amount, unit, dateObj){
   if(entry){ entry.amount = amount; entry.unit = unit; entry.ts = dateObj; }
   state.feedings.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
-  render();
+  render(); scrollToTop();
   await postRow('Feedings', { action:'update', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' });
   fetchAll();
 }
@@ -669,7 +671,7 @@ async function updateDiaper(id, type, dateObj){
   if(entry){ entry.type = type; entry.ts = dateObj; }
   state.diapers.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
-  render();
+  render(); scrollToTop();
   await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type, loggedBy: '' });
   fetchAll();
 }
@@ -678,7 +680,7 @@ async function updateWeight(id, weightKg, dateObj){
   if(entry){ entry.weightKg = weightKg; entry.ts = dateObj; }
   state.weights.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
-  render();
+  render(); scrollToTop();
   await postRow('Weights', { action:'update', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' });
   fetchAll();
 }
@@ -686,21 +688,21 @@ async function updateWeight(id, weightKg, dateObj){
 async function deleteFeed(id){
   state.feedings = state.feedings.filter(f=>f.id!==id);
   state.modal = null; state.editingId = null;
-  render();
+  render(); scrollToTop();
   await postRow('Feedings', { action:'delete', id });
   fetchAll();
 }
 async function deleteDiaper(id){
   state.diapers = state.diapers.filter(d=>d.id!==id);
   state.modal = null; state.editingId = null;
-  render();
+  render(); scrollToTop();
   await postRow('Diapers', { action:'delete', id });
   fetchAll();
 }
 async function deleteWeight(id){
   state.weights = state.weights.filter(w=>w.id!==id);
   state.modal = null; state.editingId = null;
-  render();
+  render(); scrollToTop();
   await postRow('Weights', { action:'delete', id });
   fetchAll();
 }
@@ -781,9 +783,12 @@ function renderHome(){
   const feedsToday = state.feedings.filter(f=>withinHours(f.ts,24));
   const mlToday = Math.round(feedsToday.reduce((s,f)=>s+toMl(f.amount,f.unit),0));
 
-  const recent = [...state.feedings.map(f=>({...f,kind:'feed'})), ...state.diapers.map(d=>({...d,kind:'diaper'}))]
+  const allActivity = [...state.feedings.map(f=>({...f,kind:'feed'})), ...state.diapers.map(d=>({...d,kind:'diaper'}))]
+    .sort((a,b)=>b.ts-a.ts);
 
-    .sort((a,b)=>b.ts-a.ts).slice(0,12);
+  const windowHours = state.recentWindowDays * 24;
+  const recent = allActivity.filter(x=>withinHours(x.ts, windowHours));
+  const hasMoreBeyondWindow = allActivity.length > recent.length;
 
   return `
     ${state.loadError ? bannerErr() : ''}
@@ -810,6 +815,7 @@ function renderHome(){
     </div>
     ${recent.length===0 ? `<div class="empty">Nothing logged yet. Tap a button above to start.</div>` :
       recent.map(entryRow).join('')}
+    ${hasMoreBeyondWindow ? `<button class="btn ghost" id="load-more-activity" style="width:100%; padding:14px; margin-top:14px;">Load 7 more days</button>` : ''}
   `;
 }
 function entryRow(e){
@@ -1356,7 +1362,7 @@ function openEditWeight(id){
 /* ---------------- event wiring ---------------- */
 function attachHandlers(){
   document.querySelectorAll('[data-tab]').forEach(b=>{
-    b.onclick = ()=>{ state.tab = b.dataset.tab; render(); if(state.tab==='trends') setTimeout(drawCharts, 30); };
+    b.onclick = ()=>{ state.tab = b.dataset.tab; render(); scrollToTop(); if(state.tab==='trends') setTimeout(drawCharts, 30); };
   });
   document.querySelectorAll('[data-open]').forEach(b=>{
     b.onclick = ()=>{ if(b.dataset.open==='feed') openAddFeed(); else openAddDiaper(); };
@@ -1366,6 +1372,8 @@ function attachHandlers(){
   });
   const refreshHome = document.getElementById('refresh-home');
   if(refreshHome) refreshHome.onclick = fetchAll;
+  const loadMoreActivity = document.getElementById('load-more-activity');
+  if(loadMoreActivity) loadMoreActivity.onclick = ()=>{ state.recentWindowDays += 7; render(); };
 
   /* feed modal */
   const feedAmtInput = document.getElementById('feed-amt-input');
@@ -1380,7 +1388,7 @@ function attachHandlers(){
     };
   });
   const feedCancel = document.getElementById('feed-cancel');
-  if(feedCancel) feedCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); };
+  if(feedCancel) feedCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); scrollToTop(); };
   const feedSave = document.getElementById('feed-save');
   if(feedSave) feedSave.onclick = async ()=>{
     const dateObj = feedPickerOpen ? readWheelPicker('feed') : feedTimeValue;
@@ -1404,7 +1412,7 @@ function attachHandlers(){
   const diaperPickerToggle = document.getElementById('diaper-picker-toggle');
   if(diaperPickerToggle) diaperPickerToggle.onclick = ()=>{ diaperPickerOpen = true; render(); };
   const diaperCancel = document.getElementById('diaper-cancel');
-  if(diaperCancel) diaperCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); };
+  if(diaperCancel) diaperCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); scrollToTop(); };
   const diaperSave = document.getElementById('diaper-save');
   if(diaperSave) diaperSave.onclick = async ()=>{
     const dateObj = diaperPickerOpen ? readWheelPicker('diaper') : diaperTimeValue;
@@ -1440,7 +1448,7 @@ function attachHandlers(){
     };
   });
   const weightCancel = document.getElementById('weight-cancel');
-  if(weightCancel) weightCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); };
+  if(weightCancel) weightCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); scrollToTop(); };
   const weightSave = document.getElementById('weight-save');
   if(weightSave) weightSave.onclick = async ()=>{
     const dstr = document.getElementById('weight-time').value;
