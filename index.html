@@ -753,16 +753,10 @@ function render(){
   `;
   attachHandlers();
   if(state.modal==='feed'){
-    const amtEl = document.getElementById('feed-amt-input');
-    if(amtEl){ amtEl.focus(); amtEl.select(); }
     if(feedPickerOpen) initWheelPicker('feed', feedTimeValue);
   }
   if(state.modal==='diaper'){
     if(diaperPickerOpen) initWheelPicker('diaper', diaperTimeValue);
-  }
-  if(state.modal==='weight'){
-    const wEl = document.getElementById('weight-amt-input');
-    if(wEl){ wEl.focus(); wEl.select(); }
   }
   if(state.modal==='weightDetail'){
     setTimeout(()=>drawWeightChart('weightChartExpanded', true), 30);
