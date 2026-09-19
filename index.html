@@ -143,7 +143,7 @@
   .sectiontitle{
     font-size:13px;
     color:var(--text-dim);
-    font-weight:600;
+    font-weight:400;
     margin:40px 0 16px 0;
     display:flex;
     align-items:center;
@@ -169,7 +169,7 @@
   .dot.dirty{ background:var(--dirty); }
   .dot.both{ background:var(--both); }
   .entry .main{ flex:1; }
-  .entry .title{ font-size:14.5px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .entry .title{ font-size:14.5px; font-weight:400; font-variant-numeric:tabular-nums; }
   .entry .sub{ font-size:12.5px; color:var(--text-dim); margin-top:1px; }
   .entry .time{ font-size:12px; color:var(--text-dim); text-align:right; line-height:1.4; font-variant-numeric:tabular-nums; }
   .entry.editable{ cursor:pointer; }
@@ -892,10 +892,11 @@ function entryRow(e){
       ${editable ? `<div class="chev">›</div>` : ''}
     </div>`;
   }
+  const diaperLabel = e.type==='both' ? 'Wet & dirty diaper' : e.type.charAt(0).toUpperCase()+e.type.slice(1)+' diaper';
   return `<div class="${cls}" ${clickAttr}>
     <div class="dot diaper"></div>
     <div class="main">
-      <div class="title">Diaper — ${e.type}</div>
+      <div class="title">${diaperLabel}</div>
     </div>
     <div class="time">${fmtDay(e.ts)}<br>${fmtTime(e.ts)}</div>
     ${editable ? `<div class="chev">›</div>` : ''}
