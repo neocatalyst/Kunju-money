@@ -92,7 +92,7 @@
     padding-right:4px;
   }
   .hero-value{
-    font-size:48px;
+    font-size:42px;
     font-weight:500;
     letter-spacing:-0.01em;
     font-variant-numeric:tabular-nums;
@@ -325,6 +325,7 @@
     font-family:inherit; font-size:32px; font-weight:700; text-align:center;
     transition:border-color 0.15s ease;
   }
+  .amtinput::placeholder{ color:var(--text-dim); opacity:0.5; font-weight:400; }
   .amtinput:focus{ outline:none; border-color:var(--milk); }
   .presetrow{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
   .presetchip{
@@ -856,8 +857,8 @@ function renderHome(){
       <div class="hero-text">
         <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
         <div class="hero-label">since last feed</div>
-        <div class="statuscard" style="margin-top:20px; text-align:right;"><div class="n" style="color:var(--milk);">${lastFeed ? Math.round(lastFeed.amount) : '—'}</div><div class="l">ml last fed</div></div>
-        <div class="statuscard" style="margin-top:14px; text-align:right;"><div class="n">${mlToday}</div><div class="l">ml in 24h</div></div>
+        <div class="statuscard" style="margin-top:18px; text-align:right;"><div class="n" style="color:var(--milk);">${(lastFeed && lastFeed.amount) ? Math.round(lastFeed.amount) : '—'}</div><div class="l">ml last fed</div></div>
+        <div class="statuscard" style="margin-top:18px; text-align:right;"><div class="n">${mlToday}</div><div class="l">ml in 24h</div></div>
       </div>
     </div>
     <div class="actions">
@@ -885,7 +886,7 @@ function entryRow(e){
     return `<div class="${cls}" ${clickAttr}>
       <div class="dot feed"></div>
       <div class="main">
-        <div class="title">${e.amount} ml bottle</div>
+        <div class="title">${e.amount ? e.amount+' ml bottle' : 'Bottle — amount not set'}</div>
       </div>
       <div class="time">${fmtDay(e.ts)}<br>${fmtTime(e.ts)}</div>
       ${editable ? `<div class="chev">›</div>` : ''}
@@ -1328,7 +1329,7 @@ let feedPickerOpen = false;
 
 function renderFeedModal(){
   const editing = !!state.editingId;
-  const amtDisplay = (feedAmount === 0 && !editing) ? '' : feedAmount;
+  const amtDisplay = (feedAmount === 0) ? '' : feedAmount;
   const presets = [30,60,90,120];
   return `
   <div class="modalbg" id="modal-bg-feed">
