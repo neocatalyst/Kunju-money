@@ -55,7 +55,7 @@
     position:relative;
     display:flex;
     align-items:flex-start;
-    min-height:300px;
+    min-height:350px;
     margin-top:104px;
     padding:24px 4px 46px 4px;
   }
@@ -63,7 +63,7 @@
     position:absolute;
     top:4px;
     left:-46px;
-    width:290px;
+    width:348px;
     height:auto;
     transform:rotate(-8deg);
     pointer-events:none;
@@ -234,7 +234,7 @@
     z-index:20;
     background:var(--bg);
     display:flex;
-    padding:2px 6px calc(8px + env(safe-area-inset-bottom)) 6px;
+    padding:2px 6px calc(4px + env(safe-area-inset-bottom)) 6px;
     transform:translate3d(0,0,0);
     -webkit-transform:translate3d(0,0,0);
     will-change:transform;
@@ -265,8 +265,8 @@
     transition:transform 0.1s ease;
   }
   .tabbtn:active{ transform:scale(0.92); }
-  .tabbtn .ico{ display:flex; align-items:center; justify-content:center; width:42px; height:30px; border-radius:12px; transition:background 0.15s ease; }
-  .tabbtn .ico svg{ width:22px; height:22px; display:block; }
+  .tabbtn .ico{ display:flex; align-items:center; justify-content:center; width:44px; height:32px; border-radius:12px; transition:background 0.15s ease; }
+  .tabbtn .ico svg{ width:25px; height:25px; display:block; }
   .tabbtn.active{ color:var(--milk); }
   .tabbtn.active .ico{ background:var(--surface-2); }
 
@@ -445,7 +445,7 @@
     60%{ transform:scale(1); }
   }
   .lovetitle{
-    font-size:27px;
+    font-size:22px;
     font-weight:300;
     letter-spacing:-0.005em;
     margin-top:12px;
