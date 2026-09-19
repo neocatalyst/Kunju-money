@@ -299,6 +299,14 @@
   .unittoggle button.active{ background:var(--milk); color:#241d0a; border-color:var(--milk); }
 
   /* custom iOS-style scrolling wheel picker */
+  .pickersummary{
+    width:100%; padding:14px 16px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); background:var(--surface-2); color:var(--text);
+    font-family:inherit; font-size:16px; font-weight:600;
+    display:flex; align-items:center; justify-content:space-between;
+    cursor:pointer;
+  }
+  .pickersummary:active{ border-color:var(--milk); }
   .wheelpicker{
     position:relative;
     display:flex;
@@ -752,10 +760,10 @@ function render(){
   if(state.modal==='feed'){
     const amtEl = document.getElementById('feed-amt-input');
     if(amtEl){ amtEl.focus(); amtEl.select(); }
-    initWheelPicker('feed', feedTimeValue);
+    if(feedPickerOpen) initWheelPicker('feed', feedTimeValue);
   }
   if(state.modal==='diaper'){
-    initWheelPicker('diaper', diaperTimeValue);
+    if(diaperPickerOpen) initWheelPicker('diaper', diaperTimeValue);
   }
   if(state.modal==='weight'){
     const wEl = document.getElementById('weight-amt-input');
@@ -1101,14 +1109,13 @@ function drawWeightChart(canvasId, expanded){
 /* ---------------- settings ---------------- */
 function renderAbout(){
   return `
-    <div class="lovecard">
-      <div class="loveheart">❤️</div>
-      <div class="lovetitle">Made with love,<br>for our little Kunju Money</div>
-      <div class="lovesub">Every bottle, every diaper, every gram — tracked with care.</div>
+    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:100%;">
+      <div class="lovecard">
+        <div class="loveheart">❤️</div>
+        <div class="lovetitle">Made with love,<br>for our little Kunju Money</div>
+        <div class="lovesub">Every bottle, every diaper, every gram — tracked with care.</div>
+      </div>
     </div>
-    <div class="sectiontitle" style="margin-top:8px;">Data</div>
-    <button class="btn ghost" id="st-refresh" style="width:100%; padding:15px;">Refresh data from sheet</button>
-    <div class="help" style="margin-top:16px; text-align:center;">Kunju Money — a two-person feeding & diaper tracker, backed by your own Google Sheet.</div>
   `;
 }
 
@@ -1204,9 +1211,20 @@ function readWheelPicker(prefix){
   d.setHours(hour24, minute, 0, 0);
   return d;
 }
+function formatPickerSummary(d){
+  return `${fmtDay(d)}, ${fmtTime(d)}`;
+}
+function renderPickerField(prefix, dateObj, isOpen){
+  if(isOpen) return renderWheelPicker(prefix);
+  return `<button type="button" class="pickersummary" id="${prefix}-picker-toggle">
+    <span>${formatPickerSummary(dateObj)}</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px;"><path d="M6 9l6 6 6-6"/></svg>
+  </button>`;
+}
 
 let feedAmount = 0;
 let feedTimeValue = null;
+let feedPickerOpen = false;
 
 function renderFeedModal(){
   const editing = !!state.editingId;
@@ -1218,14 +1236,14 @@ function renderFeedModal(){
       <h2>${editing ? 'Edit bottle' : 'Log bottle'}</h2>
       <div class="field">
         <label>Amount (mL)</label>
-        <input type="number" inputmode="decimal" id="feed-amt-input" class="amtinput" value="${amtDisplay}" placeholder="0" min="0" step="1">
+        <input type="number" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="feed-amt-input" class="amtinput" value="${amtDisplay}" placeholder="0" min="0" step="1">
         <div class="presetrow">
           ${presets.map(p=>`<button type="button" class="presetchip" data-preset="${p}">${p}</button>`).join('')}
         </div>
       </div>
       <div class="field">
         <label>Date &amp; time</label>
-        ${renderWheelPicker('feed')}
+        ${renderPickerField('feed', feedTimeValue, feedPickerOpen)}
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="feed-cancel">Cancel</button>
@@ -1238,6 +1256,7 @@ function renderFeedModal(){
 
 let diaperType = 'wet';
 let diaperTimeValue = null;
+let diaperPickerOpen = false;
 
 function renderDiaperModal(){
   const editing = !!state.editingId;
@@ -1255,7 +1274,7 @@ function renderDiaperModal(){
       </div>
       <div class="field">
         <label>Date &amp; time</label>
-        ${renderWheelPicker('diaper')}
+        ${renderPickerField('diaper', diaperTimeValue, diaperPickerOpen)}
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="diaper-cancel">Cancel</button>
@@ -1268,26 +1287,26 @@ function renderDiaperModal(){
 
 function openAddFeed(){
   state.editingId = null; feedAmount = 0;
-  feedTimeValue = new Date();
+  feedTimeValue = new Date(); feedPickerOpen = false;
   state.modal = 'feed'; render();
 }
 function openEditFeed(id){
   const entry = state.feedings.find(f=>f.id===id);
   if(!entry) return;
   state.editingId = id; feedAmount = entry.amount;
-  feedTimeValue = new Date(entry.ts);
+  feedTimeValue = new Date(entry.ts); feedPickerOpen = false;
   state.modal = 'feed'; render();
 }
 function openAddDiaper(){
   state.editingId = null; diaperType = 'wet';
-  diaperTimeValue = new Date();
+  diaperTimeValue = new Date(); diaperPickerOpen = false;
   state.modal = 'diaper'; render();
 }
 function openEditDiaper(id){
   const entry = state.diapers.find(d=>d.id===id);
   if(!entry) return;
   state.editingId = id; diaperType = entry.type;
-  diaperTimeValue = new Date(entry.ts);
+  diaperTimeValue = new Date(entry.ts); diaperPickerOpen = false;
   state.modal = 'diaper'; render();
 }
 
@@ -1310,7 +1329,7 @@ function renderWeightModal(){
       <h2>${editing ? 'Edit weigh-in' : 'Log weight'}</h2>
       <div class="field">
         <label>Weight</label>
-        <input type="number" inputmode="decimal" id="weight-amt-input" class="amtinput" value="${amtDisplay}" placeholder="0" min="0" step="0.01">
+        <input type="number" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" id="weight-amt-input" class="amtinput" value="${amtDisplay}" placeholder="0" min="0" step="0.01">
       </div>
       <div class="field">
         <label>Unit</label>
@@ -1358,15 +1377,15 @@ function attachHandlers(){
   });
   const refreshHome = document.getElementById('refresh-home');
   if(refreshHome) refreshHome.onclick = fetchAll;
-  const stRefresh = document.getElementById('st-refresh');
-  if(stRefresh) stRefresh.onclick = fetchAll;
 
   /* feed modal */
   const feedAmtInput = document.getElementById('feed-amt-input');
   if(feedAmtInput) feedAmtInput.oninput = ()=>{ feedAmount = Number(feedAmtInput.value) || 0; };
+  const feedPickerToggle = document.getElementById('feed-picker-toggle');
+  if(feedPickerToggle) feedPickerToggle.onclick = ()=>{ feedPickerOpen = true; render(); };
   document.querySelectorAll('.presetchip').forEach(b=>{
     b.onclick = ()=>{
-      feedTimeValue = readWheelPicker('feed');
+      if(feedPickerOpen) feedTimeValue = readWheelPicker('feed');
       feedAmount = Number(b.dataset.preset);
       render();
     };
@@ -1375,7 +1394,7 @@ function attachHandlers(){
   if(feedCancel) feedCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); };
   const feedSave = document.getElementById('feed-save');
   if(feedSave) feedSave.onclick = async ()=>{
-    const dateObj = readWheelPicker('feed');
+    const dateObj = feedPickerOpen ? readWheelPicker('feed') : feedTimeValue;
     const amt = Number(document.getElementById('feed-amt-input').value) || 0;
     if(state.editingId){
       await updateFeed(state.editingId, amt, 'ml', dateObj);
@@ -1393,11 +1412,13 @@ function attachHandlers(){
   document.querySelectorAll('.typegrid button').forEach(b=>{
     b.onclick = ()=>{ diaperType = b.dataset.t; document.querySelectorAll('.typegrid button').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); };
   });
+  const diaperPickerToggle = document.getElementById('diaper-picker-toggle');
+  if(diaperPickerToggle) diaperPickerToggle.onclick = ()=>{ diaperPickerOpen = true; render(); };
   const diaperCancel = document.getElementById('diaper-cancel');
   if(diaperCancel) diaperCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); };
   const diaperSave = document.getElementById('diaper-save');
   if(diaperSave) diaperSave.onclick = async ()=>{
-    const dateObj = readWheelPicker('diaper');
+    const dateObj = diaperPickerOpen ? readWheelPicker('diaper') : diaperTimeValue;
     if(state.editingId){
       await updateDiaper(state.editingId, diaperType, dateObj);
     }else{
