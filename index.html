@@ -8,6 +8,18 @@
 <meta name="apple-mobile-web-app-title" content="Kunju Money">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<!-- Discourages the browser from serving a stale cached copy of this
+     page itself when opened from a Home Screen shortcut/bookmark. This
+     is a request, not a guarantee — some browsers weigh it more than
+     others — but it's the strongest lever available without a service
+     worker or control over real HTTP response headers (GitHub Pages
+     doesn't let us set those directly). -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -972,7 +984,6 @@ function renderHome(){
     <div style="text-align:center; font-family:'Pacifico',cursive; font-size:18px; color:#fff; opacity:0.85;">Kunju Money</div>
     ${state.loadError ? bannerErr() : ''}
     ${state.syncError ? bannerSyncErr() : ''}
-    ${(!state.loaded && state.loading) ? bannerLoading() : ''}
     <div class="hero">
       <img class="hero-photo" src="${heroPhoto}" alt="">
       <div class="hero-text">
@@ -991,8 +1002,9 @@ function renderHome(){
       <span>Recent activity</span>
       <button class="iconbtn" id="refresh-home" aria-label="Refresh" style="margin-left:auto;"><svg class="${state.backgroundRefreshing ? 'spinning' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18.5 16"/><path d="M20 5v6h-6"/></svg></button>
     </div>
-    ${recent.length===0 ? `<div class="empty">Nothing logged yet. Tap a button above to start.</div>` :
-      recent.map(entryRow).join('')}
+    ${(!state.loaded && state.loading) ? bannerLoading() :
+      (recent.length===0 ? `<div class="empty">Nothing logged yet. Tap a button above to start.</div>` :
+      recent.map(entryRow).join(''))}
     ${hasMoreBeyondWindow ? `<button class="btn ghost" id="load-more-activity" style="width:100%; padding:14px; margin-top:14px;">Load 7 more days</button>` : ''}
   `;
 }
