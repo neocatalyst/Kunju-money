@@ -26,7 +26,7 @@
     --diaper: #7FB8A4;
     --diaper-dim: #3d5c52;
     --wet: #7FB0D8;
-    --dirty: #C98A5A;
+    --dirty: #7A4A24;
     --both: #A98AC9;
     --danger: #D8756B;
     --radius: 18px;
@@ -125,9 +125,9 @@
   .statuscard .l{ font-size:13px; color:var(--text-dim); margin-top:2px; line-height:1.3; }
 
   /* big action buttons */
-  .actions{ display:flex; justify-content:space-between; padding:0 8px; margin-bottom:28px; position:relative; z-index:2; }
+  .actions{ display:flex; justify-content:center; gap:22px; margin-bottom:28px; position:relative; z-index:2; }
   .actionbtn{
-    width:74px; height:74px;
+    width:92px; height:92px;
     border:none;
     border-radius:50%;
     background:var(--surface-2);
@@ -135,7 +135,7 @@
     display:flex;
     align-items:center;
     justify-content:center;
-    font-size:32px;
+    font-size:40px;
     cursor:pointer;
     transition:transform 0.12s ease;
     position:relative;
@@ -161,7 +161,7 @@
     position:absolute;
     inset:0;
     border-radius:50%;
-    background:conic-gradient(from var(--shimmer-angle,0deg), transparent 0%, var(--milk) 12%, #fff 16%, var(--milk) 20%, transparent 32%, transparent 100%);
+    background:conic-gradient(from var(--shimmer-angle,0deg), transparent 0%, var(--milk) 10%, #fff 17%, #fff 19%, var(--milk) 26%, transparent 34%, transparent 100%);
     z-index:0;
     pointer-events:none;
     animation:shimmer-spin 2s linear 7 forwards, shimmer-fadeout 0.8s ease-out 14s forwards;
@@ -190,6 +190,19 @@
     0%{ transform:translate(0,0) scale(0.6); opacity:0; }
     15%{ opacity:1; transform:translate(calc(var(--drift,0px)*0.2), -20px) scale(1); }
     100%{ transform:translate(var(--drift,0px), -160px) scale(1.1); opacity:0; }
+  }
+  .heart-flash{
+    position:fixed;
+    inset:0;
+    background:rgba(220,40,50,0.28);
+    z-index:70;
+    pointer-events:none;
+    animation:heart-flash-fade 2.4s ease-out forwards;
+  }
+  @keyframes heart-flash-fade{
+    0%{ opacity:0; }
+    15%{ opacity:1; }
+    100%{ opacity:0; }
   }
 
   .sectiontitle{
@@ -450,10 +463,7 @@
     transition:transform 0.1s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .typegrid button:active{ transform:scale(0.96); }
-  .typegrid button.sel{ background:var(--surface-2); border-width:2px; }
-  .typegrid button[data-t=wet].sel{ border-color:var(--wet); color:var(--wet); }
-  .typegrid button[data-t=dirty].sel{ border-color:var(--dirty); color:var(--dirty); }
-  .typegrid button[data-t=both].sel{ border-color:var(--both); color:var(--both); }
+  .typegrid button.sel{ background:var(--surface-2); border-width:2px; border-color:var(--milk); color:var(--milk); }
 
   .modalbtns{ display:flex; gap:10px; margin-top:8px; }
   .btn{
@@ -463,7 +473,6 @@
   }
   .btn:active{ transform:scale(0.97); opacity:0.9; }
   .btn.primary{ background:var(--milk); color:#241d0a; }
-  .btn.primary.diaper{ background:var(--diaper); color:#0d1e19; }
   .btn.ghost{ background:var(--surface-2); color:var(--text-dim); }
 
   .settingsblock{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; margin-bottom:16px; }
@@ -624,31 +633,37 @@ function sheetBase(){ return API_URL; }
 function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function scrollToTop(){ window.scrollTo(0, 0); }
 
-// Purely a fun, one-off visual moment — no data is logged. Spawns a
-// handful of heart emoji that float up from the button and fade out,
-// each with a slightly randomized drift, delay, and size so they don't
-// look like a mechanical, identical repeat of each other.
+// Purely a fun, one-off visual moment — no data is logged. Spawns hearts
+// spread across the whole screen (not just rising from the button) and
+// pulses a brief red tint over the page, like a quick camera-filter
+// flash, fading back to normal after a couple of seconds.
 function spawnFloatingHearts(fromEl){
   const rect = fromEl.getBoundingClientRect();
-  const originX = rect.left + rect.width/2;
   const originY = rect.top + rect.height/2;
+  const vw = window.innerWidth;
   const emojis = ['❤️','💛','💕','💖'];
-  const count = 7;
+  const count = 18;
   for(let i=0; i<count; i++){
     const el = document.createElement('span');
     el.className = 'floating-heart';
     el.textContent = emojis[Math.floor(Math.random()*emojis.length)];
-    const drift = (Math.random()-0.5) * 90;
-    const delay = Math.random() * 200;
-    const size = 20 + Math.random()*16;
-    el.style.left = (originX - 13) + 'px';
-    el.style.top = (originY - 13) + 'px';
+    const startX = Math.random()*vw;
+    const startY = originY + (Math.random()-0.5)*140;
+    const drift = (Math.random()-0.5) * 160;
+    const delay = Math.random() * 450;
+    const size = 20 + Math.random()*22;
+    el.style.left = (startX - 13) + 'px';
+    el.style.top = (startY - 13) + 'px';
     el.style.fontSize = size + 'px';
     el.style.animationDelay = delay + 'ms';
     el.style.setProperty('--drift', drift + 'px');
     document.body.appendChild(el);
-    setTimeout(()=> el.remove(), 2000 + delay);
+    setTimeout(()=> el.remove(), 2200 + delay);
   }
+  const flash = document.createElement('div');
+  flash.className = 'heart-flash';
+  document.body.appendChild(flash);
+  setTimeout(()=> flash.remove(), 2600);
 }
 
 
@@ -1497,7 +1512,7 @@ function renderDiaperModal(){
       </div>
       <div class="modalbtns">
         <button class="btn ghost" id="diaper-cancel">Cancel</button>
-        <button class="btn primary diaper" id="diaper-save">Save</button>
+        <button class="btn primary" id="diaper-save">Save</button>
       </div>
     </div>
   </div>`;
