@@ -1713,7 +1713,14 @@ function attachHandlers(){
       if(b.dataset.u==='lb' && weightUnit==='kg') weightAmount = raw / LB_TO_KG;
       else if(b.dataset.u==='kg' && weightUnit==='lb') weightAmount = raw * LB_TO_KG;
       weightUnit = b.dataset.u;
-      render();
+      // Update the toggle's own highlight and the input's value directly
+      // instead of calling the global render() — the same fix already
+      // applied to the preset chips and diaper type selector. A full
+      // render() here would tear down and rebuild the whole modal,
+      // replaying its opening (fade + slide-up) animation — which is
+      // exactly what looks like "the modal popping up again."
+      document.querySelectorAll('#weight-unit-toggle button').forEach(x=>x.classList.toggle('active', x===b));
+      if(amtEl) amtEl.value = weightAmount ? Math.round(weightAmount*100)/100 : '';
     };
   });
   const weightCancel = document.getElementById('weight-cancel');
@@ -1774,7 +1781,7 @@ function setupViewportGuard(){
   render();
   if(state.config) fetchAll(); // quietly refreshes with live data in the background
   setupViewportGuard();
-  setInterval(()=>{ if(state.tab==='home') render(); }, 60000);
+  setInterval(()=>{ if(state.tab==='home' && !state.modal) render(); }, 60000);
 
   // Two people are using this from separate devices, so this device's
   // own view can go stale the moment the OTHER person logs something —
