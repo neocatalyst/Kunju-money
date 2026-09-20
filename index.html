@@ -125,62 +125,72 @@
   .statuscard .l{ font-size:13px; color:var(--text-dim); margin-top:2px; line-height:1.3; }
 
   /* big action buttons */
-  .actions{ display:flex; gap:12px; margin-bottom:22px; position:relative; z-index:2; }
+  .actions{ display:flex; justify-content:space-between; padding:0 8px; margin-bottom:28px; position:relative; z-index:2; }
   .actionbtn{
-    flex:1;
+    width:74px; height:74px;
     border:none;
-    border-radius:var(--radius);
-    padding:22px 10px 18px 10px;
+    border-radius:50%;
+    background:var(--surface-2);
+    box-shadow:0 6px 16px rgba(0,0,0,0.4);
     display:flex;
-    flex-direction:column;
     align-items:center;
-    gap:8px;
-    font-family:inherit;
+    justify-content:center;
+    font-size:32px;
     cursor:pointer;
     transition:transform 0.12s ease;
     position:relative;
     isolation:isolate;
   }
-  .actionbtn:active{ transform:scale(0.96); }
+  .actionbtn:active{ transform:scale(0.92); }
 
-  /* one-time attention-drawing shimmer ring around Log Bottle on load.
-     Both layers sit directly on the button itself, sized with inset:0 —
-     i.e. mathematically identical to the button's own box — so the ring
-     can never extend past the button's actual edge. The visible "ring"
-     is just a thin gap between the outer spinning layer and an inner
-     layer that re-covers the center with the button's own color.
-     Runs for ~14s (7 slow rotations) before fading, so it's easy to
-     catch rather than finishing in the first couple of seconds. */
+  /* one-time attention-drawing shimmer ring around the heart button on
+     load. Both layers sit directly on the button itself, sized with
+     inset:0 — i.e. mathematically identical to the button's own circle —
+     so the ring can never extend past the button's actual edge. The
+     visible "ring" is just a thin gap between the outer spinning layer
+     and an inner layer that re-covers the center with the button's own
+     color. Runs for ~14s (7 slow rotations) before fading, so it's easy
+     to catch rather than finishing in the first couple of seconds. */
   @property --shimmer-angle{
     syntax:'<angle>';
     initial-value:0deg;
     inherits:false;
   }
-  .actionbtn.feed::before{
+  .actionbtn.heart::before{
     content:'';
     position:absolute;
     inset:0;
-    border-radius:inherit;
+    border-radius:50%;
     background:conic-gradient(from var(--shimmer-angle,0deg), transparent 0%, var(--milk) 12%, #fff 16%, var(--milk) 20%, transparent 32%, transparent 100%);
     z-index:0;
     pointer-events:none;
     animation:shimmer-spin 2s linear 7 forwards, shimmer-fadeout 0.8s ease-out 14s forwards;
   }
-  .actionbtn.feed::after{
+  .actionbtn.heart::after{
     content:'';
     position:absolute;
     inset:2px;
-    border-radius:calc(var(--radius) - 2px);
-    background:linear-gradient(135deg, var(--milk), #c99347);
+    border-radius:50%;
+    background:var(--surface-2);
     z-index:1;
   }
-  .actionbtn.feed .ico, .actionbtn.feed .lbl{ position:relative; z-index:2; }
+  .actionbtn.heart span{ position:relative; z-index:2; }
   @keyframes shimmer-spin{ to{ --shimmer-angle:360deg; } }
   @keyframes shimmer-fadeout{ to{ opacity:0; } }
-  .actionbtn.feed{ background:linear-gradient(135deg, var(--milk), #c99347); color:#241d0a; }
-  .actionbtn.diaper{ background:linear-gradient(135deg, var(--diaper), #427c69); color:#0d1e19; }
-  .actionbtn .ico{ font-size:28px; }
-  .actionbtn .lbl{ font-size:15px; font-weight:700; }
+
+  /* floating hearts burst, triggered on tapping the heart button */
+  .floating-heart{
+    position:fixed;
+    font-size:26px;
+    pointer-events:none;
+    z-index:80;
+    animation:float-heart 1.6s ease-out forwards;
+  }
+  @keyframes float-heart{
+    0%{ transform:translate(0,0) scale(0.6); opacity:0; }
+    15%{ opacity:1; transform:translate(calc(var(--drift,0px)*0.2), -20px) scale(1); }
+    100%{ transform:translate(var(--drift,0px), -160px) scale(1.1); opacity:0; }
+  }
 
   .sectiontitle{
     font-size:13px;
@@ -338,7 +348,7 @@
   @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
   @keyframes slideUp{ from{ transform:translateY(100%); } to{ transform:translateY(0); } }
   .modal{
-    background:var(--surface);
+    background:#0a0a0a;
     width:100%;
     max-width:480px;
     margin:0 auto;
@@ -440,7 +450,10 @@
     transition:transform 0.1s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .typegrid button:active{ transform:scale(0.96); }
-  .typegrid button.sel{ background:var(--surface-2); border-color:var(--diaper); border-width:2px; color:var(--diaper); }
+  .typegrid button.sel{ background:var(--surface-2); border-width:2px; }
+  .typegrid button[data-t=wet].sel{ border-color:var(--wet); color:var(--wet); }
+  .typegrid button[data-t=dirty].sel{ border-color:var(--dirty); color:var(--dirty); }
+  .typegrid button[data-t=both].sel{ border-color:var(--both); color:var(--both); }
 
   .modalbtns{ display:flex; gap:10px; margin-top:8px; }
   .btn{
@@ -610,6 +623,34 @@ async function saveConfig(cfg){
 function sheetBase(){ return API_URL; }
 function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function scrollToTop(){ window.scrollTo(0, 0); }
+
+// Purely a fun, one-off visual moment — no data is logged. Spawns a
+// handful of heart emoji that float up from the button and fade out,
+// each with a slightly randomized drift, delay, and size so they don't
+// look like a mechanical, identical repeat of each other.
+function spawnFloatingHearts(fromEl){
+  const rect = fromEl.getBoundingClientRect();
+  const originX = rect.left + rect.width/2;
+  const originY = rect.top + rect.height/2;
+  const emojis = ['❤️','💛','💕','💖'];
+  const count = 7;
+  for(let i=0; i<count; i++){
+    const el = document.createElement('span');
+    el.className = 'floating-heart';
+    el.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+    const drift = (Math.random()-0.5) * 90;
+    const delay = Math.random() * 200;
+    const size = 20 + Math.random()*16;
+    el.style.left = (originX - 13) + 'px';
+    el.style.top = (originY - 13) + 'px';
+    el.style.fontSize = size + 'px';
+    el.style.animationDelay = delay + 'ms';
+    el.style.setProperty('--drift', drift + 'px');
+    document.body.appendChild(el);
+    setTimeout(()=> el.remove(), 2000 + delay);
+  }
+}
+
 
 const CACHE_KEY = 'kunju_data_cache';
 
@@ -926,12 +967,9 @@ function renderHome(){
       </div>
     </div>
     <div class="actions">
-      <button class="actionbtn diaper" data-open="diaper">
-        <span class="ico">👶</span><span class="lbl">Log Diaper</span>
-      </button>
-      <button class="actionbtn feed" data-open="feed">
-        <span class="ico">🍼</span><span class="lbl">Log Bottle</span>
-      </button>
+      <button class="actionbtn diaper" data-open="diaper" aria-label="Log diaper"><span>💩</span></button>
+      <button class="actionbtn heart" id="heart-btn" aria-label="Send love"><span>❤️</span></button>
+      <button class="actionbtn feed" data-open="feed" aria-label="Log bottle"><span>🍼</span></button>
     </div>
     <div class="sectiontitle" style="margin-top:44px; margin-bottom:2px; border-bottom:none; padding-bottom:0; display:flex; align-items:center; gap:8px;">
       <span>Recent activity</span>
@@ -964,7 +1002,7 @@ function entryRow(e){
   // component too) biggest of the three — same 14.5px ceiling as feed dots.
   const diaperDotSize = e.type==='wet' ? 7 : e.type==='dirty' ? 11 : 13;
   return `<div class="${cls}" ${clickAttr}>
-    <div class="dot diaper" style="width:${diaperDotSize}px; height:${diaperDotSize}px;"></div>
+    <div class="dot ${e.type}" style="width:${diaperDotSize}px; height:${diaperDotSize}px;"></div>
     <div class="main">
       <div class="title">${diaperLabel}</div>
     </div>
@@ -1565,6 +1603,8 @@ function attachHandlers(){
   document.querySelectorAll('[data-open]').forEach(b=>{
     b.onclick = ()=>{ if(b.dataset.open==='feed') openAddFeed(); else openAddDiaper(); };
   });
+  const heartBtn = document.getElementById('heart-btn');
+  if(heartBtn) heartBtn.onclick = ()=> spawnFloatingHearts(heartBtn);
   document.querySelectorAll('[data-period]').forEach(b=>{
     b.onclick = ()=>{ state.period = Number(b.dataset.period); render(); if(state.tab==='trends') setTimeout(drawCharts, 30); };
   });
