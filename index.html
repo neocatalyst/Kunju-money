@@ -141,15 +141,16 @@
   .actionbtn{
     width:110px; height:110px;
     flex-shrink:0;
-    border:1px solid rgba(255,255,255,0.28);
+    border:1px solid rgba(255,255,255,0.4);
     border-radius:50%;
-    background:linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04));
-    backdrop-filter:blur(20px) saturate(180%);
-    -webkit-backdrop-filter:blur(20px) saturate(180%);
+    background:linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.02));
+    backdrop-filter:blur(26px) saturate(200%);
+    -webkit-backdrop-filter:blur(26px) saturate(200%);
     box-shadow:
-      0 8px 22px rgba(0,0,0,0.45),
-      inset 0 1px 1px rgba(255,255,255,0.5),
-      inset 0 -10px 16px rgba(0,0,0,0.22);
+      0 12px 28px rgba(0,0,0,0.5),
+      inset 0 0 0 0.5px rgba(255,255,255,0.5),
+      inset 0 2px 3px rgba(255,255,255,0.7),
+      inset 0 -16px 22px rgba(0,0,0,0.3);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -185,8 +186,8 @@
        This mask hides everything except the outer ~3px, so only a ring
        is visible and the real glass background underneath (the button's
        own, not a second copy of it) shows through everywhere else. */
-    mask-image:radial-gradient(circle, transparent calc(100% - 5px), white calc(100% - 3px));
-    -webkit-mask-image:radial-gradient(circle, transparent calc(100% - 5px), white calc(100% - 3px));
+    mask-image:radial-gradient(circle closest-side, transparent calc(100% - 5px), white calc(100% - 3px));
+    -webkit-mask-image:radial-gradient(circle closest-side, transparent calc(100% - 5px), white calc(100% - 3px));
     z-index:1;
     pointer-events:none;
     animation:shimmer-spin 1.6s linear 1 forwards, shimmer-fadeout 0.6s ease-out 1.6s forwards;
