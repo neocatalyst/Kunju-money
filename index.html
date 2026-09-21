@@ -141,10 +141,15 @@
   .actionbtn{
     width:110px; height:110px;
     flex-shrink:0;
-    border:none;
+    border:1px solid rgba(255,255,255,0.28);
     border-radius:50%;
-    background:linear-gradient(135deg, #333333, #1c1c1c);
-    box-shadow:0 6px 16px rgba(0,0,0,0.4);
+    background:linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04));
+    backdrop-filter:blur(20px) saturate(180%);
+    -webkit-backdrop-filter:blur(20px) saturate(180%);
+    box-shadow:
+      0 8px 22px rgba(0,0,0,0.45),
+      inset 0 1px 1px rgba(255,255,255,0.5),
+      inset 0 -10px 16px rgba(0,0,0,0.22);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -175,17 +180,16 @@
     inset:0;
     border-radius:50%;
     background:conic-gradient(from var(--shimmer-angle,0deg), transparent 0%, var(--milk) 10%, #fff 17%, #fff 19%, var(--milk) 26%, transparent 34%, transparent 100%);
-    z-index:0;
+    /* A conic-gradient's color runs from the center out to the edge at
+       every angle — it doesn't naturally form a thin ring by itself.
+       This mask hides everything except the outer ~3px, so only a ring
+       is visible and the real glass background underneath (the button's
+       own, not a second copy of it) shows through everywhere else. */
+    mask-image:radial-gradient(circle, transparent calc(100% - 5px), white calc(100% - 3px));
+    -webkit-mask-image:radial-gradient(circle, transparent calc(100% - 5px), white calc(100% - 3px));
+    z-index:1;
     pointer-events:none;
     animation:shimmer-spin 1.6s linear 1 forwards, shimmer-fadeout 0.6s ease-out 1.6s forwards;
-  }
-  .actionbtn.heart::after{
-    content:'';
-    position:absolute;
-    inset:2px;
-    border-radius:50%;
-    background:linear-gradient(135deg, #333333, #1c1c1c);
-    z-index:1;
   }
   .actionbtn.heart span{ position:relative; z-index:2; }
   @keyframes shimmer-spin{ to{ --shimmer-angle:360deg; } }
@@ -925,6 +929,8 @@ function render(){
     const okBtn = document.getElementById('confirm-delete-ok');
     if(cancelBtn) cancelBtn.onclick = ()=>{ state.confirmDelete = null; render(); };
     if(okBtn) okBtn.onclick = async ()=>{
+      if(okBtn.disabled) return;
+      okBtn.disabled = true;
       const action = state.confirmDelete.onConfirm;
       state.confirmDelete = null;
       await action();
@@ -1005,7 +1011,7 @@ function renderHome(){
     ${(!state.loaded && state.loading) ? bannerLoading() :
       (recent.length===0 ? `<div class="empty">Nothing logged yet. Tap a button above to start.</div>` :
       recent.map(entryRow).join(''))}
-    ${hasMoreBeyondWindow ? `<button class="btn ghost" id="load-more-activity" style="width:100%; padding:14px; margin-top:14px;">Load 7 more days</button>` : ''}
+    ${hasMoreBeyondWindow ? `<button class="btn ghost" id="load-more-activity" style="width:100%; padding:14px; margin-top:14px;">Load 2 more days</button>` : ''}
   `;
 }
 function entryRow(e){
@@ -1531,12 +1537,20 @@ function renderDiaperModal(){
   </div>`;
 }
 
+// Every open* function below checks state.modal first. This makes it
+// structurally impossible for two modals to ever exist at once — no
+// matter what actually triggers a second open attempt (a double-tap, an
+// accidental second call, a stray re-render racing a click), the guard
+// simply refuses the second one outright rather than us needing to hunt
+// down every possible cause of a duplicate open.
 function openAddFeed(){
+  if(state.modal) return;
   state.editingId = null; feedAmount = 0;
   feedTimeValue = new Date(); feedPickerOpen = false;
   state.modal = 'feed'; render();
 }
 function openEditFeed(id){
+  if(state.modal) return;
   const entry = state.feedings.find(f=>f.id===id);
   if(!entry) return;
   state.editingId = id; feedAmount = entry.amount;
@@ -1544,11 +1558,13 @@ function openEditFeed(id){
   state.modal = 'feed'; render();
 }
 function openAddDiaper(){
+  if(state.modal) return;
   state.editingId = null; diaperType = 'wet';
   diaperTimeValue = new Date(); diaperPickerOpen = false;
   state.modal = 'diaper'; render();
 }
 function openEditDiaper(id){
+  if(state.modal) return;
   const entry = state.diapers.find(d=>d.id===id);
   if(!entry) return;
   state.editingId = id; diaperType = entry.type;
@@ -1600,11 +1616,13 @@ function renderWeightModal(){
 }
 
 function openAddWeight(){
+  if(state.modal) return;
   state.editingId = null; weightAmount = 0; weightUnit = 'kg';
   weightDateStr = dateStrFromDate(new Date());
   state.modal = 'weight'; render();
 }
 function openEditWeight(id){
+  if(state.modal) return;
   const entry = state.weights.find(w=>w.id===id);
   if(!entry) return;
   state.editingId = id; weightAmount = entry.weightKg; weightUnit = 'kg';
@@ -1639,7 +1657,7 @@ function attachHandlers(){
   const refreshHome = document.getElementById('refresh-home');
   if(refreshHome) refreshHome.onclick = ()=>{ state.syncError = false; fetchAll(); };
   const loadMoreActivity = document.getElementById('load-more-activity');
-  if(loadMoreActivity) loadMoreActivity.onclick = ()=>{ state.recentWindowDays += 7; render(); };
+  if(loadMoreActivity) loadMoreActivity.onclick = ()=>{ state.recentWindowDays += 2; render(); };
 
   /* feed modal */
   const feedAmtInput = document.getElementById('feed-amt-input');
@@ -1656,6 +1674,10 @@ function attachHandlers(){
   if(feedCancel) feedCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); scrollToTop(); };
   const feedSave = document.getElementById('feed-save');
   if(feedSave) feedSave.onclick = async ()=>{
+    // Guards against a double-tap (or any stray re-render racing a click)
+    // ever submitting the same save twice and creating a duplicate entry.
+    if(feedSave.disabled) return;
+    feedSave.disabled = true;
     const dateObj = feedPickerOpen ? readWheelPicker('feed') : feedTimeValue;
     const amt = Number(document.getElementById('feed-amt-input').value) || 0;
     if(state.editingId){
@@ -1682,6 +1704,8 @@ function attachHandlers(){
   if(diaperCancel) diaperCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); scrollToTop(); };
   const diaperSave = document.getElementById('diaper-save');
   if(diaperSave) diaperSave.onclick = async ()=>{
+    if(diaperSave.disabled) return;
+    diaperSave.disabled = true;
     const dateObj = diaperPickerOpen ? readWheelPicker('diaper') : diaperTimeValue;
     if(state.editingId){
       await updateDiaper(state.editingId, diaperType, dateObj);
@@ -1727,6 +1751,8 @@ function attachHandlers(){
   if(weightCancel) weightCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); scrollToTop(); };
   const weightSave = document.getElementById('weight-save');
   if(weightSave) weightSave.onclick = async ()=>{
+    if(weightSave.disabled) return;
+    weightSave.disabled = true;
     const dstr = document.getElementById('weight-time').value;
     const dateObj = new Date(dstr + 'T12:00:00');
     const raw = Number(document.getElementById('weight-amt-input').value) || 0;
