@@ -716,10 +716,25 @@ async function fetchAll(){
   if(silent) render();
   state.loadError = null;
   try{
+    // A hard timeout on each request. This matters most for installed
+    // Home Screen apps on iOS: unlike a regular browser tab, iOS
+    // aggressively suspends a standalone app's JS the moment it's not
+    // on screen — including a fetch that's already in flight. When you
+    // reopen it, that frozen request can simply hang forever rather
+    // than ever resolving or failing, which is what leaves a spinner
+    // stuck with no data arriving. This timeout guarantees a request
+    // gives up and fails cleanly instead, so the retry logic below (and
+    // the visibility/pageshow triggers further down) can actually kick
+    // in rather than waiting on a request that will never settle.
+    const withTimeout = (url)=>{
+      const controller = new AbortController();
+      const timer = setTimeout(()=>controller.abort(), 12000);
+      return fetch(url, {signal: controller.signal}).finally(()=>clearTimeout(timer));
+    };
     const [fRes, dRes, wRes] = await Promise.all([
-      fetch(sheetBase() + '?sheet=Feedings&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
-      fetch(sheetBase() + '?sheet=Diapers&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
-      fetch(sheetBase() + '?sheet=Weights&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now())
+      withTimeout(sheetBase() + '?sheet=Feedings&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
+      withTimeout(sheetBase() + '?sheet=Diapers&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
+      withTimeout(sheetBase() + '?sheet=Weights&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now())
     ]);
     const fJson = await fRes.json();
     const dJson = await dRes.json();
@@ -1069,6 +1084,19 @@ function renderTrends(){
   const totalMl = feeds.reduce((s,f)=>s+toMl(f.amount,f.unit),0);
   const avgMl = feeds.length ? (totalMl/feeds.length) : 0;
 
+  // 24h shows straight totals for the day. Week/Month show per-day
+  // averages instead of period totals — "12 bottles this week" is much
+  // less useful at a glance than "1.7 bottles/day", especially once
+  // you're trying to compare a week to a typical day.
+  const numDays = state.period / 24;
+  const isDaily = state.period === 24;
+  const perDay = (n)=> (n/numDays).toFixed(1);
+
+  const bottlesLabel = isDaily ? 'bottles' : 'avg bottles/day';
+  const bottlesVal = isDaily ? feeds.length : perDay(feeds.length);
+  const mlLabel = isDaily ? 'total ml' : 'avg ml/day';
+  const mlVal = isDaily ? Math.round(totalMl) : Math.round(totalMl/numDays);
+
   let avgIntervalStr = '—';
   if(feeds.length>1){
     const sorted = [...feeds].sort((a,b)=>a.ts-b.ts);
@@ -1083,6 +1111,12 @@ function renderTrends(){
   const dirty = diapers.filter(d=>d.type==='dirty').length;
   const both = diapers.filter(d=>d.type==='both').length;
 
+  const changesLabel = isDaily ? 'total changes' : 'avg changes/day';
+  const changesVal = isDaily ? diapers.length : perDay(diapers.length);
+  const wetVal = isDaily ? wet : perDay(wet);
+  const dirtyVal = isDaily ? dirty : perDay(dirty);
+  const bothVal = isDaily ? both : perDay(both);
+
   const dot = (color)=>`<span class="sectiondot" style="background:${color}"></span>`;
 
   return `
@@ -1095,17 +1129,17 @@ function renderTrends(){
     </div>
     <div class="sectiontitle" style="margin-top:0;">${dot('var(--milk)')}Feeding — ${periodLabel(state.period)}</div>
     <div class="statgrid">
-      <div class="statbig"><div class="v">${feeds.length}</div><div class="k">bottles</div></div>
-      <div class="statbig"><div class="v">${Math.round(totalMl)}</div><div class="k">total ml</div></div>
+      <div class="statbig"><div class="v">${bottlesVal}</div><div class="k">${bottlesLabel}</div></div>
+      <div class="statbig"><div class="v">${mlVal}</div><div class="k">${mlLabel}</div></div>
       <div class="statbig"><div class="v">${Math.round(avgMl)}</div><div class="k">avg ml / bottle</div></div>
       <div class="statbig"><div class="v">${avgIntervalStr}</div><div class="k">avg time between</div></div>
     </div>
     <div class="sectiontitle">${dot('var(--diaper)')}Diapers — ${periodLabel(state.period)}</div>
     <div class="statgrid">
-      <div class="statbig"><div class="v">${diapers.length}</div><div class="k">total changes</div></div>
-      <div class="statbig"><div class="v">${wet}</div><div class="k" style="color:var(--wet)">wet</div></div>
-      <div class="statbig"><div class="v">${dirty}</div><div class="k" style="color:var(--dirty)">dirty</div></div>
-      <div class="statbig"><div class="v">${both}</div><div class="k" style="color:var(--both)">both</div></div>
+      <div class="statbig"><div class="v">${changesVal}</div><div class="k">${changesLabel}</div></div>
+      <div class="statbig"><div class="v">${wetVal}</div><div class="k" style="color:var(--wet)">wet</div></div>
+      <div class="statbig"><div class="v">${dirtyVal}</div><div class="k" style="color:var(--dirty)">dirty</div></div>
+      <div class="statbig"><div class="v">${bothVal}</div><div class="k" style="color:var(--both)">both</div></div>
     </div>
     <div class="sectiontitle">${dot('var(--wet)')}Daily trends</div>
     <div class="chartcard">
@@ -1822,6 +1856,19 @@ function setupViewportGuard(){
   //    when a stale view would otherwise be visible and misleading.
   document.addEventListener('visibilitychange', ()=>{
     if(document.visibilityState === 'visible' && state.config && !state.modal){
+      fetchAll();
+    }
+  });
+
+  // 1b) A standalone Home Screen app on iOS is treated more like a
+  //     suspended native app than a browser tab — reopening it can
+  //     restore a frozen page rather than firing visibilitychange the
+  //     way a regular tab would. 'pageshow' with event.persisted is the
+  //     dedicated signal for "this page just came back from that kind
+  //     of suspension," so it's a necessary backstop specifically for
+  //     the installed-app case.
+  window.addEventListener('pageshow', (event)=>{
+    if(event.persisted && state.config && !state.modal){
       fetchAll();
     }
   });
