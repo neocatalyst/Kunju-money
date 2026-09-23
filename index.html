@@ -180,7 +180,7 @@
     position:absolute;
     inset:0;
     border-radius:50%;
-    background:conic-gradient(from var(--shimmer-angle,0deg), transparent 0%, var(--milk) 10%, #fff 17%, #fff 19%, var(--milk) 26%, transparent 34%, transparent 100%);
+    background:conic-gradient(from var(--shimmer-angle,0deg), transparent 0%, #b8c2cc 10%, #fff 17%, #fff 19%, #b8c2cc 26%, transparent 34%, transparent 100%);
     /* A conic-gradient's color runs from the center out to the edge at
        every angle — it doesn't naturally form a thin ring by itself.
        This mask hides everything except the outer ~3px, so only a ring
@@ -711,9 +711,16 @@ async function fetchAll(){
   // only show a loading state if we have nothing on screen yet — once
   // there's cached/previous data visible, refreshes happen quietly
   const silent = state.loaded;
-  if(!silent){ state.loading = true; render(); }
+  // Every render() call below checks state.modal fresh, right before
+  // firing — not just once at the top. A modal can open *during* the
+  // network round-trip this function waits on, and re-checking only at
+  // the start isn't enough: this function's own final render() at the
+  // end was unconditional, so a modal opened mid-fetch would still get
+  // redrawn (replaying its entrance animation) the moment this finished
+  // — which looks exactly like "a second modal replacing the first."
+  if(!silent){ state.loading = true; if(!state.modal) render(); }
   state.backgroundRefreshing = true;
-  if(silent) render();
+  if(silent && !state.modal) render();
   state.loadError = null;
   try{
     // A hard timeout on each request. This matters most for installed
@@ -756,7 +763,10 @@ async function fetchAll(){
   }
   state.loading = false;
   state.backgroundRefreshing = false;
-  render();
+  // Data is still updated above regardless of whether a modal is open —
+  // only the *redraw* is skipped, so whatever's fresh is already in
+  // place and will show correctly the instant the modal closes.
+  if(!state.modal) render();
   if(state.tab==='trends' && !state.modal) setTimeout(drawCharts, 30);
   if(state.modal==='weightDetail') setTimeout(()=>drawWeightChart('weightChartExpanded', true), 30);
 }
@@ -1088,8 +1098,20 @@ function renderTrends(){
   // averages instead of period totals — "12 bottles this week" is much
   // less useful at a glance than "1.7 bottles/day", especially once
   // you're trying to compare a week to a typical day.
-  const numDays = state.period / 24;
+  const numDaysNominal = state.period / 24;
   const isDaily = state.period === 24;
+
+  // If you've only been tracking for, say, 4 days and ask for a week's
+  // average, dividing by 7 would understate it — those extra 3 days
+  // never happened, they're not "zero days," they're "no data yet."
+  // Use however many days of real history exist instead, whenever
+  // that's fewer than the nominal window, and say so explicitly.
+  const allActivityTs = [...state.feedings, ...state.diapers].map(x=>x.ts.getTime());
+  const earliestTs = allActivityTs.length ? Math.min(...allActivityTs) : Date.now();
+  const daysOfHistory = Math.max(1, Math.ceil((Date.now()-earliestTs)/86400000));
+  const numDays = isDaily ? 1 : Math.min(numDaysNominal, daysOfHistory);
+  const isPartialWindow = !isDaily && daysOfHistory < numDaysNominal;
+
   const perDay = (n)=> (n/numDays).toFixed(1);
 
   const bottlesLabel = isDaily ? 'bottles' : 'avg bottles/day';
@@ -1127,6 +1149,7 @@ function renderTrends(){
       <button class="${state.period===168?'active':''}" data-period="168">Week</button>
       <button class="${state.period===720?'active':''}" data-period="720">Month</button>
     </div>
+    ${isPartialWindow ? `<div style="font-size:12.5px; color:var(--text-dim); margin:-8px 0 20px 0; line-height:1.4;">Only ${daysOfHistory} day${daysOfHistory===1?'':'s'} of data so far — averages are based on ${daysOfHistory} day${daysOfHistory===1?'':'s'}, not a full ${state.period===168?'week':'month'} yet.</div>` : ''}
     <div class="sectiontitle" style="margin-top:0;">${dot('var(--milk)')}Feeding — ${periodLabel(state.period)}</div>
     <div class="statgrid">
       <div class="statbig"><div class="v">${bottlesVal}</div><div class="k">${bottlesLabel}</div></div>
