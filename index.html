@@ -754,12 +754,21 @@ async function fetchAll(){
     state.diapers.sort((a,b)=>b.ts-a.ts);
     state.weights.sort((a,b)=>b.ts-a.ts);
     state.loaded = true;
+    state.syncError = false;
     saveCache();
   }catch(e){
-    // if we already have cached data on screen, a failed background
-    // refresh shouldn't blank it out or alarm the person — just skip
-    // showing the error and quietly try again next time
-    if(!state.loaded) state.loadError = "Couldn't reach the sheet. Check that the Web App is deployed with access set to Anyone.";
+    // If there's no data on screen yet, this is a hard failure — show
+    // it plainly. If cached data IS already showing, don't blank the
+    // screen or show a scary full-page error for a single missed
+    // refresh — but do NOT stay completely silent either. A refresh
+    // that keeps failing quietly, forever, with zero indication, is
+    // exactly what makes stale data look like an unexplainable mystery
+    // rather than a visible, fixable connection problem.
+    if(!state.loaded){
+      state.loadError = "Couldn't reach the sheet. Check that the Web App is deployed with access set to Anyone.";
+    }else{
+      state.syncError = true;
+    }
   }
   state.loading = false;
   state.backgroundRefreshing = false;
@@ -825,13 +834,27 @@ async function logFeed(amount, unit, dateObj){
   fetchAll();
 }
 async function logDiaper(type, dateObj){
-  const id = genId();
-  const row = { id, ts: dateObj, type };
-  state.diapers.unshift(row);
-  state.diapers.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
-  render(); scrollToTop();
-  try{ await postRow('Diapers', { action:'add', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  if(type==='both'){
+    // "Both" stays as a one-tap convenience in the UI, but underneath
+    // it's stored as two independent entries — one wet, one dirty, same
+    // timestamp — rather than a separate "both" category, so Trends
+    // stats and Recent Activity both count it correctly as one of each
+    // instead of needing their own third bucket.
+    const idWet = genId(), idDirty = genId();
+    state.diapers.unshift({ id:idWet, ts:dateObj, type:'wet' }, { id:idDirty, ts:dateObj, type:'dirty' });
+    state.diapers.sort((a,b)=>b.ts-a.ts);
+    render(); scrollToTop();
+    try{ await postRow('Diapers', { action:'add', id:idWet, timestamp: dateObj.toISOString(), type:'wet', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+    try{ await postRow('Diapers', { action:'add', id:idDirty, timestamp: dateObj.toISOString(), type:'dirty', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  }else{
+    const id = genId();
+    const row = { id, ts: dateObj, type };
+    state.diapers.unshift(row);
+    state.diapers.sort((a,b)=>b.ts-a.ts);
+    render(); scrollToTop();
+    try{ await postRow('Diapers', { action:'add', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  }
   fetchAll();
 }
 async function logWeight(weightKg, dateObj){
@@ -856,11 +879,25 @@ async function updateFeed(id, amount, unit, dateObj){
 }
 async function updateDiaper(id, type, dateObj){
   const entry = state.diapers.find(d=>d.id===id);
-  if(entry){ entry.type = type; entry.ts = dateObj; }
-  state.diapers.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
-  render(); scrollToTop();
-  try{ await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  if(type==='both'){
+    // Editing a single existing entry into "Both": that one entry becomes
+    // wet, and a brand-new dirty entry is added alongside it with the
+    // same timestamp — same end result as logging "Both" fresh, just
+    // starting from an existing row instead of nothing.
+    const newDirtyId = genId();
+    if(entry){ entry.type = 'wet'; entry.ts = dateObj; }
+    state.diapers.unshift({ id:newDirtyId, ts:dateObj, type:'dirty' });
+    state.diapers.sort((a,b)=>b.ts-a.ts);
+    render(); scrollToTop();
+    try{ await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type:'wet', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+    try{ await postRow('Diapers', { action:'add', id:newDirtyId, timestamp: dateObj.toISOString(), type:'dirty', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  }else{
+    if(entry){ entry.type = type; entry.ts = dateObj; }
+    state.diapers.sort((a,b)=>b.ts-a.ts);
+    render(); scrollToTop();
+    try{ await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  }
   fetchAll();
 }
 async function updateWeight(id, weightKg, dateObj){
@@ -1074,7 +1111,7 @@ function bannerErr(){
   return `<div class="banner err">⚠️ <div>${state.loadError}</div></div>`;
 }
 function bannerSyncErr(){
-  return `<div class="banner err">⚠️ <div>Couldn't save your last change — check your connection, then tap refresh to try reconciling.</div></div>`;
+  return `<div class="banner err">⚠️ <div>Couldn't sync just now — check your connection. Showing the last data that loaded successfully; tap refresh to try again.</div></div>`;
 }
 function bannerLoading(){
   return `<div class="banner"><div class="spinner"></div><div>Loading from your sheet…</div></div>`;
@@ -1131,13 +1168,11 @@ function renderTrends(){
 
   const wet = diapers.filter(d=>d.type==='wet').length;
   const dirty = diapers.filter(d=>d.type==='dirty').length;
-  const both = diapers.filter(d=>d.type==='both').length;
 
   const changesLabel = isDaily ? 'total changes' : 'avg changes/day';
   const changesVal = isDaily ? diapers.length : perDay(diapers.length);
   const wetVal = isDaily ? wet : perDay(wet);
   const dirtyVal = isDaily ? dirty : perDay(dirty);
-  const bothVal = isDaily ? both : perDay(both);
 
   const dot = (color)=>`<span class="sectiondot" style="background:${color}"></span>`;
 
@@ -1162,7 +1197,6 @@ function renderTrends(){
       <div class="statbig"><div class="v">${changesVal}</div><div class="k">${changesLabel}</div></div>
       <div class="statbig"><div class="v">${wetVal}</div><div class="k" style="color:var(--wet)">wet</div></div>
       <div class="statbig"><div class="v">${dirtyVal}</div><div class="k" style="color:var(--dirty)">dirty</div></div>
-      <div class="statbig"><div class="v">${bothVal}</div><div class="k" style="color:var(--both)">both</div></div>
     </div>
     <div class="sectiontitle">${dot('var(--wet)')}Daily trends</div>
     <div class="chartcard">
@@ -1268,7 +1302,6 @@ function drawCharts(){
   const ozByDay = dayKeys.map(k => state.feedings.filter(f=>dayKey(f.ts)===k).reduce((s,f)=>s+toMl(f.amount,f.unit),0));
   const wetByDay = dayKeys.map(k => state.diapers.filter(d=>dayKey(d.ts)===k && d.type==='wet').length);
   const dirtyByDay = dayKeys.map(k => state.diapers.filter(d=>dayKey(d.ts)===k && d.type==='dirty').length);
-  const bothByDay = dayKeys.map(k => state.diapers.filter(d=>dayKey(d.ts)===k && d.type==='both').length);
 
   if(feedChartInstance) feedChartInstance.destroy();
   if(diaperChartInstance) diaperChartInstance.destroy();
@@ -1293,8 +1326,7 @@ function drawCharts(){
     type:'bar',
     data:{ labels, datasets:[
       { label:'wet', data:wetByDay, backgroundColor:'#7FB0D8' },
-      { label:'dirty', data:dirtyByDay, backgroundColor:'#C98A5A' },
-      { label:'both', data:bothByDay, backgroundColor:'#A98AC9' }
+      { label:'dirty', data:dirtyByDay, backgroundColor:'#C98A5A' }
     ]},
     options:{
       responsive:true, maintainAspectRatio:false,
