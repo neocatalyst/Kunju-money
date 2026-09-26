@@ -707,32 +707,28 @@ function loadCache(){
   }catch(e){ return false; }
 }
 
+let fetchGeneration = 0;
 async function fetchAll(){
-  // only show a loading state if we have nothing on screen yet — once
-  // there's cached/previous data visible, refreshes happen quietly
+  // "Generation" tracking: every call gets a ticket number when it
+  // starts. Several independent things can trigger a fetch now — a
+  // periodic timer, regaining focus, right after a save — so more than
+  // one can end up in flight at once. Without this, an older call that
+  // happens to finish *after* a newer one could overwrite a fresh,
+  // successful result with its own stale failure — showing a sync
+  // error even though the data on screen is already correct. Each
+  // fetch checks its own ticket against the latest one before touching
+  // any shared state; if a newer fetch has since started, it quietly
+  // discards its own result instead of clobbering something newer.
+  const myGeneration = ++fetchGeneration;
+  const isCurrent = ()=> myGeneration === fetchGeneration;
+
   const silent = state.loaded;
-  // Every render() call below checks state.modal fresh, right before
-  // firing — not just once at the top. A modal can open *during* the
-  // network round-trip this function waits on, and re-checking only at
-  // the start isn't enough: this function's own final render() at the
-  // end was unconditional, so a modal opened mid-fetch would still get
-  // redrawn (replaying its entrance animation) the moment this finished
-  // — which looks exactly like "a second modal replacing the first."
   if(!silent){ state.loading = true; if(!state.modal) render(); }
   state.backgroundRefreshing = true;
   if(silent && !state.modal) render();
   state.loadError = null;
-  try{
-    // A hard timeout on each request. This matters most for installed
-    // Home Screen apps on iOS: unlike a regular browser tab, iOS
-    // aggressively suspends a standalone app's JS the moment it's not
-    // on screen — including a fetch that's already in flight. When you
-    // reopen it, that frozen request can simply hang forever rather
-    // than ever resolving or failing, which is what leaves a spinner
-    // stuck with no data arriving. This timeout guarantees a request
-    // gives up and fails cleanly instead, so the retry logic below (and
-    // the visibility/pageshow triggers further down) can actually kick
-    // in rather than waiting on a request that will never settle.
+
+  const attempt = async ()=>{
     const withTimeout = (url)=>{
       const controller = new AbortController();
       const timer = setTimeout(()=>controller.abort(), 12000);
@@ -753,23 +749,41 @@ async function fetchAll(){
     state.feedings.sort((a,b)=>b.ts-a.ts);
     state.diapers.sort((a,b)=>b.ts-a.ts);
     state.weights.sort((a,b)=>b.ts-a.ts);
+  };
+
+  let ok = false;
+  try{
+    await attempt();
+    ok = true;
+  }catch(e1){
+    // A single failed attempt is very often just a momentary blip —
+    // wifi/cellular handoff, the screen waking up before the network's
+    // fully back. Wait briefly and try once more before ever surfacing
+    // anything to the person; this is what stops "it says not synced,
+    // then clears itself two seconds later" from ever being visible in
+    // the first place.
+    await new Promise(r=>setTimeout(r, 1500));
+    if(!isCurrent()) return; // a newer fetch has taken over; abandon this one entirely
+    try{
+      await attempt();
+      ok = true;
+    }catch(e2){
+      ok = false;
+    }
+  }
+
+  if(!isCurrent()) return; // superseded by a newer fetch while this one was finishing
+
+  if(ok){
     state.loaded = true;
     state.syncError = false;
     saveCache();
-  }catch(e){
-    // If there's no data on screen yet, this is a hard failure — show
-    // it plainly. If cached data IS already showing, don't blank the
-    // screen or show a scary full-page error for a single missed
-    // refresh — but do NOT stay completely silent either. A refresh
-    // that keeps failing quietly, forever, with zero indication, is
-    // exactly what makes stale data look like an unexplainable mystery
-    // rather than a visible, fixable connection problem.
-    if(!state.loaded){
-      state.loadError = "Couldn't reach the sheet. Check that the Web App is deployed with access set to Anyone.";
-    }else{
-      state.syncError = true;
-    }
+  }else if(!state.loaded){
+    state.loadError = "Couldn't reach the sheet. Check that the Web App is deployed with access set to Anyone.";
+  }else{
+    state.syncError = true;
   }
+
   state.loading = false;
   state.backgroundRefreshing = false;
   // Data is still updated above regardless of whether a modal is open —
@@ -1052,7 +1066,6 @@ function renderHome(){
   return `
     <div style="text-align:center; font-family:'Pacifico',cursive; font-size:18px; color:#fff; opacity:0.85;">Kunju Money</div>
     ${state.loadError ? bannerErr() : ''}
-    ${state.syncError ? bannerSyncErr() : ''}
     <div class="hero">
       <img class="hero-photo" src="${heroPhoto}" alt="">
       <div class="hero-text">
@@ -1067,6 +1080,7 @@ function renderHome(){
       <button class="actionbtn heart" id="heart-btn" aria-label="Send love"><span>❤️</span></button>
       <button class="actionbtn feed" data-open="feed" aria-label="Log bottle"><span>🍼</span></button>
     </div>
+    ${state.syncError ? bannerSyncErr() : ''}
     <div class="sectiontitle" style="margin-top:26px; margin-bottom:2px; border-bottom:none; padding-bottom:0; display:flex; align-items:center; gap:8px;">
       <span>Recent activity</span>
       <button class="iconbtn" id="refresh-home" aria-label="Refresh" style="margin-left:auto;"><svg class="${state.backgroundRefreshing ? 'spinning' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18.5 16"/><path d="M20 5v6h-6"/></svg></button>
@@ -1111,7 +1125,7 @@ function bannerErr(){
   return `<div class="banner err">⚠️ <div>${state.loadError}</div></div>`;
 }
 function bannerSyncErr(){
-  return `<div class="banner err">⚠️ <div>Couldn't sync just now — check your connection. Showing the last data that loaded successfully; tap refresh to try again.</div></div>`;
+  return `<div class="banner err">⚠️ <div style="flex:1;">Couldn't sync just now — check your connection. Showing the last data that loaded successfully.</div><button id="sync-error-refresh" class="btn ghost" style="flex:none; padding:7px 14px; font-size:12.5px;">Refresh</button></div>`;
 }
 function bannerLoading(){
   return `<div class="banner"><div class="spinner"></div><div>Loading from your sheet…</div></div>`;
@@ -1746,6 +1760,8 @@ function attachHandlers(){
   });
   const refreshHome = document.getElementById('refresh-home');
   if(refreshHome) refreshHome.onclick = ()=>{ state.syncError = false; fetchAll(); };
+  const syncErrorRefresh = document.getElementById('sync-error-refresh');
+  if(syncErrorRefresh) syncErrorRefresh.onclick = ()=>{ state.syncError = false; fetchAll(); };
   const loadMoreActivity = document.getElementById('load-more-activity');
   if(loadMoreActivity) loadMoreActivity.onclick = ()=>{ state.recentWindowDays += 2; render(); };
 
