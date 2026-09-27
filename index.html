@@ -40,7 +40,7 @@
     --wet: #7FB0D8;
     --dirty: #7A4A24;
     --both: #A98AC9;
-    --sleep: #8A9BD8;
+    --sleep: #9B7FE8;
     --danger: #D8756B;
     --radius: 18px;
     --radius-sm: 12px;
@@ -204,13 +204,13 @@
      it switches to a solid, distinctly-colored fill (rather than a
      border tweak on the same glass look) plus a stronger glowing pulse */
   .actionbtn.sleep.active{
-    background:linear-gradient(135deg, var(--sleep), #4a5a9e);
+    background:linear-gradient(135deg, var(--sleep), #5a3d99);
     border-color:var(--sleep);
     animation:sleep-breathe 2.2s ease-in-out infinite;
   }
   @keyframes sleep-breathe{
-    0%, 100%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 0 rgba(138,155,216,0.6); }
-    50%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 12px rgba(138,155,216,0); }
+    0%, 100%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 0 rgba(155,127,232,0.6); }
+    50%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 12px rgba(155,127,232,0); }
   }
 
   /* recurring floating "Zzz" while a sleep session is active — a gentle,
@@ -655,7 +655,6 @@ const state = {
   diapers: [],
   weights: [],
   sleeps: [],
-  activeSleepStart: null, // Date when a sleep session is currently in progress, else null
   loaded: false,
   loading: false,
   backgroundRefreshing: false,
@@ -737,7 +736,6 @@ function spawnSleepZzz(fromEl){
 
 
 const CACHE_KEY = 'kunju_data_cache';
-const ACTIVE_SLEEP_KEY = 'kunju_active_sleep';
 
 function saveCache(){
   try{
@@ -755,28 +753,13 @@ function loadCache(){
     state.feedings = revive(data.feedings);
     state.diapers = revive(data.diapers);
     state.weights = revive(data.weights);
+    // An in-progress sleep (no EndTimestamp yet) is cached and revived
+    // here just like everything else now — it's ordinary shared data,
+    // not a device-local flag, so it correctly survives a reload the
+    // same way any other entry does.
     state.sleeps = revive(data.sleeps).map(s=> Object.assign({}, s, { endTs: s.endTs ? new Date(s.endTs) : null }));
     return state.feedings.length + state.diapers.length + state.weights.length + state.sleeps.length > 0;
   }catch(e){ return false; }
-}
-
-// An in-progress sleep session needs its own persistence, separate from
-// the completed-entries cache above — it can span hours, and the app
-// (or phone) may well restart in the middle of it, so "she's currently
-// sleeping, started at X" has to survive that independently.
-function saveActiveSleep(){
-  try{
-    if(state.activeSleepStart) localStorage.setItem(ACTIVE_SLEEP_KEY, state.activeSleepStart.toISOString());
-    else localStorage.removeItem(ACTIVE_SLEEP_KEY);
-  }catch(e){ /* storage full or unavailable — safe to ignore */ }
-}
-function loadActiveSleep(){
-  try{
-    const raw = localStorage.getItem(ACTIVE_SLEEP_KEY);
-    if(!raw) return;
-    const d = new Date(raw);
-    if(!isNaN(d)) state.activeSleepStart = d;
-  }catch(e){ /* ignore */ }
 }
 
 let fetchGeneration = 0;
@@ -885,6 +868,20 @@ function normalizeSleep(row){
   const ts = new Date(row.Timestamp);
   const endTs = new Date(row.EndTimestamp);
   return { id: row.Id || '', ts: isNaN(ts) ? null : ts, endTs: isNaN(endTs) ? null : endTs };
+}
+
+// "Is a sleep session active?" is derived from the shared data itself —
+// a sleep with no EndTimestamp yet — rather than a private flag stored
+// only on this device. That's what makes it genuinely cross-device:
+// whichever phone started it, both phones see the same in-progress row
+// once they sync, and either one can be the one to end it. If two ever
+// somehow got started before either phone had a chance to see the
+// other's (a narrow timing edge case, not the common path), the most
+// recently-started one is treated as "the" active session.
+function getActiveSleep(){
+  const inProgress = state.sleeps.filter(s=>!s.endTs);
+  if(inProgress.length===0) return null;
+  return inProgress.reduce((latest,s)=> (!latest || s.ts>latest.ts) ? s : latest, null);
 }
 
 async function postRow(sheet, body, attempt){
@@ -1012,6 +1009,18 @@ async function logSleep(startObj, endObj){
   state.modal = null;
   render(); scrollToTop();
   try{ await postRow('Sleeps', { action:'add', id, timestamp: startObj.toISOString(), endTimestamp: endObj.toISOString(), loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  fetchAll();
+}
+// Starting a sleep writes a real row to the shared sheet immediately,
+// with the end time left blank — that row (not any device-local flag)
+// IS the "sleep is active" state. The moment either phone syncs, it
+// sees this same row via getActiveSleep() and can be the one to end it.
+async function startSleep(){
+  const id = genId();
+  const startTs = new Date();
+  state.sleeps.unshift({ id, ts:startTs, endTs:null });
+  render();
+  try{ await postRow('Sleeps', { action:'add', id, timestamp: startTs.toISOString(), endTimestamp: '', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 async function updateSleep(id, startObj, endObj){
@@ -1157,6 +1166,7 @@ function renderHome(){
   const lastFeed = state.feedings[0];
   const feedsToday = state.feedings.filter(f=>withinHours(f.ts,24));
   const mlToday = Math.round(feedsToday.reduce((s,f)=>s+toMl(f.amount,f.unit),0));
+  const activeSleep = getActiveSleep();
 
   // Pick which baby photo to show based on how long it's been since the
   // last feed. No last feed at all defaults to baby1 (freshly-fed look).
@@ -1189,10 +1199,10 @@ function renderHome(){
     </div>
     <div class="actions">
       <button class="actionbtn diaper" data-open="diaper" aria-label="Log diaper"><span>💩</span></button>
-      <button class="actionbtn sleep ${state.activeSleepStart ? 'active' : ''}" id="sleep-btn" aria-label="${state.activeSleepStart ? 'End sleep' : 'Start sleep'}"><span>😴</span></button>
+      <button class="actionbtn sleep ${activeSleep ? 'active' : ''}" id="sleep-btn" aria-label="${activeSleep ? 'End sleep' : 'Start sleep'}"><span>😴</span></button>
       <button class="actionbtn feed" data-open="feed" aria-label="Log bottle"><span>🍼</span></button>
     </div>
-    ${state.activeSleepStart ? `<div style="text-align:center; font-size:13.5px; color:var(--sleep); font-weight:600; margin-top:2px;">😴 Sleep time starting — since ${fmtTime(state.activeSleepStart)}. Tap again to log it.</div>` : ''}
+    ${activeSleep ? `<div style="text-align:center; font-size:13.5px; color:var(--sleep); font-weight:400; margin-top:2px;">😴 Sleep time started since ${fmtTime(activeSleep.ts)}</div>` : ''}
     ${state.syncError ? bannerSyncErr() : ''}
     <div class="sectiontitle" style="margin-top:26px; margin-bottom:2px; border-bottom:none; padding-bottom:0; display:flex; align-items:center; gap:8px;">
       <span>Recent activity</span>
@@ -1896,6 +1906,7 @@ let sleepStartValue = null;
 let sleepStartPickerOpen = false;
 let sleepEndValue = null;
 let sleepEndPickerOpen = false;
+let sleepEndingActive = false; // true when this modal is ending a currently-active session, not editing a past one
 
 function renderWeightModal(){
   const editing = !!state.editingId;
@@ -1931,14 +1942,15 @@ function renderWeightModal(){
 }
 
 function renderSleepModal(){
-  const editing = !!state.editingId;
+  const editingPast = !!state.editingId && !sleepEndingActive;
   const duration = (sleepStartValue && sleepEndValue) ? formatDuration(sleepEndValue - sleepStartValue) : '—';
+  const heading = sleepEndingActive ? 'End sleep' : (editingPast ? 'Edit sleep' : 'Log sleep');
   return `
   <div class="modalbg" id="modal-bg-sleep">
     <div class="modal">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
-        <h2 style="margin:0;">${editing ? 'Edit sleep' : 'Log sleep'}</h2>
-        ${editing ? `<button class="iconbtn" id="sleep-delete" aria-label="Delete entry" style="background:var(--surface-2); color:var(--text-dim); width:34px; height:34px; border-radius:50%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
+        <h2 style="margin:0;">${heading}</h2>
+        ${editingPast ? `<button class="iconbtn" id="sleep-delete" aria-label="Delete entry" style="background:var(--surface-2); color:var(--text-dim); width:34px; height:34px; border-radius:50%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
       </div>
       <div style="text-align:center; margin-bottom:20px;">
         <div style="font-size:34px; font-weight:500; color:var(--sleep); font-variant-numeric:tabular-nums;" id="sleep-duration-display">${duration}</div>
@@ -1981,11 +1993,16 @@ function openEditWeight(id){
 // confirm/adjust the times before saving, or when editing a past entry.
 function openEndSleep(){
   if(state.modal) return;
-  if(!state.activeSleepStart) return;
-  state.editingId = null;
-  sleepStartValue = state.activeSleepStart;
+  const active = getActiveSleep();
+  if(!active) return;
+  // Ending is always an update to the same shared row that was created
+  // when the session started — not a new entry — which is what makes
+  // it not matter which phone started it and which one ends it.
+  state.editingId = active.id;
+  sleepStartValue = active.ts;
   sleepEndValue = new Date();
   sleepStartPickerOpen = false; sleepEndPickerOpen = false;
+  sleepEndingActive = true;
   state.modal = 'sleep'; render();
 }
 function openEditSleep(id){
@@ -1996,6 +2013,7 @@ function openEditSleep(id){
   sleepStartValue = entry.ts;
   sleepEndValue = entry.endTs || new Date();
   sleepStartPickerOpen = false; sleepEndPickerOpen = false;
+  sleepEndingActive = false;
   state.modal = 'sleep'; render();
 }
 
@@ -2022,14 +2040,16 @@ function attachHandlers(){
   if(heroPhotoTap) heroPhotoTap.onclick = ()=> spawnFloatingHearts(heroPhotoTap);
   const sleepBtn = document.getElementById('sleep-btn');
   if(sleepBtn) sleepBtn.onclick = ()=>{
-    if(state.activeSleepStart){
+    if(sleepBtn.disabled) return;
+    if(getActiveSleep()){
       openEndSleep();
     }else{
       // Starting is instant, no modal — the whole point is marking the
       // moment she starts sleeping without any friction in the way.
-      state.activeSleepStart = new Date();
-      saveActiveSleep();
-      render();
+      // It writes straight to the shared sheet (see startSleep), so
+      // either phone can be the one to end it later, not just this one.
+      sleepBtn.disabled = true;
+      startSleep();
     }
   };
   document.querySelectorAll('[data-period]').forEach(b=>{
@@ -2166,11 +2186,12 @@ function attachHandlers(){
     sleepSave.disabled = true;
     const startObj = sleepStartPickerOpen ? readWheelPicker('sleepstart') : sleepStartValue;
     const endObj = sleepEndPickerOpen ? readWheelPicker('sleepend') : sleepEndValue;
+    // Ending an active session and editing a past entry both land here
+    // as an update now, since ending one just fills in the end time on
+    // the same shared row that already exists from when it started.
     if(state.editingId){
       await updateSleep(state.editingId, startObj, endObj);
     }else{
-      state.activeSleepStart = null;
-      saveActiveSleep();
       await logSleep(startObj, endObj);
     }
   };
@@ -2214,14 +2235,13 @@ function setupViewportGuard(){
 /* ---------------- boot ---------------- */
 (async function boot(){
   await loadConfig();
-  loadActiveSleep();
   if(loadCache()){ state.loaded = true; } // instant first paint from last-known data
   render();
   if(state.config) fetchAll(); // quietly refreshes with live data in the background
   setupViewportGuard();
   setInterval(()=>{ if(state.tab==='home' && !state.modal) render(); }, 60000);
   setInterval(()=>{
-    if(state.activeSleepStart && state.tab==='home' && !state.modal){
+    if(getActiveSleep() && state.tab==='home' && !state.modal){
       const btn = document.getElementById('sleep-btn');
       if(btn) spawnSleepZzz(btn);
     }
