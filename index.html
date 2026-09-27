@@ -40,6 +40,7 @@
     --wet: #7FB0D8;
     --dirty: #7A4A24;
     --both: #A98AC9;
+    --sleep: #8A9BD8;
     --danger: #D8756B;
     --radius: 18px;
     --radius-sm: 12px;
@@ -93,9 +94,11 @@
     width:278px;
     height:auto;
     transform:rotate(-3deg);
-    pointer-events:none;
+    pointer-events:auto;
+    cursor:pointer;
     user-select:none;
     z-index:0;
+    -webkit-tap-highlight-color:transparent;
     -webkit-mask-image:linear-gradient(190deg, black 40%, transparent 92%);
     mask-image:linear-gradient(190deg, black 40%, transparent 92%);
   }
@@ -175,7 +178,7 @@
     initial-value:0deg;
     inherits:false;
   }
-  .actionbtn.heart::before{
+  .actionbtn.sleep::before{
     content:'';
     position:absolute;
     inset:0;
@@ -192,9 +195,21 @@
     pointer-events:none;
     animation:shimmer-spin 1.6s linear 1 forwards, shimmer-fadeout 0.6s ease-out 1.6s forwards;
   }
-  .actionbtn.heart span{ position:relative; z-index:2; }
+  .actionbtn.sleep span{ position:relative; z-index:2; }
   @keyframes shimmer-spin{ to{ --shimmer-angle:360deg; } }
   @keyframes shimmer-fadeout{ to{ opacity:0; } }
+
+  /* a clearly visible "she's sleeping right now" state on the sleep
+     button — a soft breathing pulse plus a colored ring, so it's obvious
+     at a glance without needing to tap anything to check */
+  .actionbtn.sleep.active{
+    border-color:rgba(138,155,216,0.7);
+    animation:sleep-breathe 2.6s ease-in-out infinite;
+  }
+  @keyframes sleep-breathe{
+    0%, 100%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 0 rgba(138,155,216,0.5); }
+    50%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 8px rgba(138,155,216,0); }
+  }
 
   /* floating hearts burst, triggered on tapping the heart button */
   .floating-heart{
@@ -251,6 +266,7 @@
   .dot.wet{ background:var(--wet); }
   .dot.dirty{ background:var(--dirty); }
   .dot.both{ background:var(--both); }
+  .dot.sleep{ background:var(--sleep); }
   .entry .main{ flex:1; }
   .entry .title{ font-size:14.5px; font-weight:400; font-variant-numeric:tabular-nums; }
   .entry .sub{ font-size:12.5px; color:var(--text-dim); margin-top:1px; }
@@ -621,6 +637,8 @@ const state = {
   feedings: [],
   diapers: [],
   weights: [],
+  sleeps: [],
+  activeSleepStart: null, // Date when a sleep session is currently in progress, else null
   loaded: false,
   loading: false,
   backgroundRefreshing: false,
@@ -628,7 +646,7 @@ const state = {
   syncError: false,  // true when a recent save/edit/delete failed even after retrying
   tab: 'home',
   period: 24,             // hours: 24, 168, 720
-  modal: null,            // 'feed' | 'diaper' | 'weight' | null
+  modal: null,            // 'feed' | 'diaper' | 'weight' | 'sleep' | null
   editingId: null,        // id of the entry being edited, or null when adding new
   confirmDelete: null,    // {message, onConfirm} while a delete confirmation is showing, else null
   recentWindowDays: 2     // how far back "Recent activity" on Home currently shows
@@ -686,11 +704,12 @@ function spawnFloatingHearts(fromEl){
 
 
 const CACHE_KEY = 'kunju_data_cache';
+const ACTIVE_SLEEP_KEY = 'kunju_active_sleep';
 
 function saveCache(){
   try{
     localStorage.setItem(CACHE_KEY, JSON.stringify({
-      feedings: state.feedings, diapers: state.diapers, weights: state.weights
+      feedings: state.feedings, diapers: state.diapers, weights: state.weights, sleeps: state.sleeps
     }));
   }catch(e){ /* storage full or unavailable — safe to ignore, just no cache */ }
 }
@@ -703,8 +722,28 @@ function loadCache(){
     state.feedings = revive(data.feedings);
     state.diapers = revive(data.diapers);
     state.weights = revive(data.weights);
-    return state.feedings.length + state.diapers.length + state.weights.length > 0;
+    state.sleeps = revive(data.sleeps).map(s=> Object.assign({}, s, { endTs: s.endTs ? new Date(s.endTs) : null }));
+    return state.feedings.length + state.diapers.length + state.weights.length + state.sleeps.length > 0;
   }catch(e){ return false; }
+}
+
+// An in-progress sleep session needs its own persistence, separate from
+// the completed-entries cache above — it can span hours, and the app
+// (or phone) may well restart in the middle of it, so "she's currently
+// sleeping, started at X" has to survive that independently.
+function saveActiveSleep(){
+  try{
+    if(state.activeSleepStart) localStorage.setItem(ACTIVE_SLEEP_KEY, state.activeSleepStart.toISOString());
+    else localStorage.removeItem(ACTIVE_SLEEP_KEY);
+  }catch(e){ /* storage full or unavailable — safe to ignore */ }
+}
+function loadActiveSleep(){
+  try{
+    const raw = localStorage.getItem(ACTIVE_SLEEP_KEY);
+    if(!raw) return;
+    const d = new Date(raw);
+    if(!isNaN(d)) state.activeSleepStart = d;
+  }catch(e){ /* ignore */ }
 }
 
 let fetchGeneration = 0;
@@ -734,21 +773,25 @@ async function fetchAll(){
       const timer = setTimeout(()=>controller.abort(), 12000);
       return fetch(url, {signal: controller.signal}).finally(()=>clearTimeout(timer));
     };
-    const [fRes, dRes, wRes] = await Promise.all([
+    const [fRes, dRes, wRes, sRes] = await Promise.all([
       withTimeout(sheetBase() + '?sheet=Feedings&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
       withTimeout(sheetBase() + '?sheet=Diapers&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
-      withTimeout(sheetBase() + '?sheet=Weights&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now())
+      withTimeout(sheetBase() + '?sheet=Weights&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
+      withTimeout(sheetBase() + '?sheet=Sleeps&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now())
     ]);
     const fJson = await fRes.json();
     const dJson = await dRes.json();
     const wJson = await wRes.json();
-    if(fJson.error || dJson.error || wJson.error) throw new Error(fJson.error || dJson.error || wJson.error);
+    const sJson = await sRes.json();
+    if(fJson.error || dJson.error || wJson.error || sJson.error) throw new Error(fJson.error || dJson.error || wJson.error || sJson.error);
     state.feedings = (Array.isArray(fJson)?fJson:[]).map(normalizeFeed).filter(x=>x.ts);
     state.diapers = (Array.isArray(dJson)?dJson:[]).map(normalizeDiaper).filter(x=>x.ts);
     state.weights = (Array.isArray(wJson)?wJson:[]).map(normalizeWeight).filter(x=>x.ts);
+    state.sleeps = (Array.isArray(sJson)?sJson:[]).map(normalizeSleep).filter(x=>x.ts);
     state.feedings.sort((a,b)=>b.ts-a.ts);
     state.diapers.sort((a,b)=>b.ts-a.ts);
     state.weights.sort((a,b)=>b.ts-a.ts);
+    state.sleeps.sort((a,b)=>b.ts-a.ts);
   };
 
   let ok = false;
@@ -804,6 +847,11 @@ function normalizeDiaper(row){
 function normalizeWeight(row){
   const ts = new Date(row.Timestamp);
   return { id: row.Id || '', ts: isNaN(ts) ? null : ts, weightKg: Number(row.Weight)||0 };
+}
+function normalizeSleep(row){
+  const ts = new Date(row.Timestamp);
+  const endTs = new Date(row.EndTimestamp);
+  return { id: row.Id || '', ts: isNaN(ts) ? null : ts, endTs: isNaN(endTs) ? null : endTs };
 }
 
 async function postRow(sheet, body, attempt){
@@ -923,6 +971,25 @@ async function updateWeight(id, weightKg, dateObj){
   try{ await postRow('Weights', { action:'update', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
+async function logSleep(startObj, endObj){
+  const id = genId();
+  const row = { id, ts: startObj, endTs: endObj };
+  state.sleeps.unshift(row);
+  state.sleeps.sort((a,b)=>b.ts-a.ts);
+  state.modal = null;
+  render(); scrollToTop();
+  try{ await postRow('Sleeps', { action:'add', id, timestamp: startObj.toISOString(), endTimestamp: endObj.toISOString(), loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  fetchAll();
+}
+async function updateSleep(id, startObj, endObj){
+  const entry = state.sleeps.find(s=>s.id===id);
+  if(entry){ entry.ts = startObj; entry.endTs = endObj; }
+  state.sleeps.sort((a,b)=>b.ts-a.ts);
+  state.modal = null; state.editingId = null;
+  render(); scrollToTop();
+  try{ await postRow('Sleeps', { action:'update', id, timestamp: startObj.toISOString(), endTimestamp: endObj.toISOString(), loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  fetchAll();
+}
 
 async function deleteFeed(id){
   state.feedings = state.feedings.filter(f=>f.id!==id);
@@ -943,6 +1010,13 @@ async function deleteWeight(id){
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
   try{ await postRow('Weights', { action:'delete', id }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  fetchAll();
+}
+async function deleteSleep(id){
+  state.sleeps = state.sleeps.filter(s=>s.id!==id);
+  state.modal = null; state.editingId = null;
+  render(); scrollToTop();
+  try{ await postRow('Sleeps', { action:'delete', id }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
 
@@ -988,6 +1062,7 @@ function render(){
     ${state.modal==='feed' ? renderFeedModal() : ''}
     ${state.modal==='diaper' ? renderDiaperModal() : ''}
     ${state.modal==='weight' ? renderWeightModal() : ''}
+    ${state.modal==='sleep' ? renderSleepModal() : ''}
     ${state.modal==='weightDetail' ? renderWeightDetailModal() : ''}
     ${state.confirmDelete ? renderConfirmDeleteModal() : ''}
   `;
@@ -997,6 +1072,10 @@ function render(){
   }
   if(state.modal==='diaper'){
     if(diaperPickerOpen) initWheelPicker('diaper', diaperTimeValue);
+  }
+  if(state.modal==='sleep'){
+    if(sleepStartPickerOpen) initWheelPicker('sleepstart', sleepStartValue);
+    if(sleepEndPickerOpen) initWheelPicker('sleepend', sleepEndValue);
   }
   if(state.modal==='weightDetail'){
     setTimeout(()=>drawWeightChart('weightChartExpanded', true), 30);
@@ -1056,7 +1135,7 @@ function renderHome(){
     else heroPhoto = "baby3.png";
   }
 
-  const allActivity = [...state.feedings.map(f=>({...f,kind:'feed'})), ...state.diapers.map(d=>({...d,kind:'diaper'}))]
+  const allActivity = [...state.feedings.map(f=>({...f,kind:'feed'})), ...state.diapers.map(d=>({...d,kind:'diaper'})), ...state.sleeps.map(s=>({...s,kind:'sleep'}))]
     .sort((a,b)=>b.ts-a.ts);
 
   const windowHours = state.recentWindowDays * 24;
@@ -1067,7 +1146,7 @@ function renderHome(){
     <div style="text-align:center; font-family:'Pacifico',cursive; font-size:18px; color:#fff; opacity:0.85;">Kunju Money</div>
     ${state.loadError ? bannerErr() : ''}
     <div class="hero">
-      <img class="hero-photo" src="${heroPhoto}" alt="">
+      <img class="hero-photo" id="hero-photo-tap" src="${heroPhoto}" alt="">
       <div class="hero-text">
         <div class="hero-value">${lastFeed ? timeSince(lastFeed.ts) : '—'}</div>
         <div class="hero-label">since last feed</div>
@@ -1077,7 +1156,7 @@ function renderHome(){
     </div>
     <div class="actions">
       <button class="actionbtn diaper" data-open="diaper" aria-label="Log diaper"><span>💩</span></button>
-      <button class="actionbtn heart" id="heart-btn" aria-label="Send love"><span>❤️</span></button>
+      <button class="actionbtn sleep ${state.activeSleepStart ? 'active' : ''}" id="sleep-btn" aria-label="${state.activeSleepStart ? 'End sleep' : 'Start sleep'}"><span>😴</span></button>
       <button class="actionbtn feed" data-open="feed" aria-label="Log bottle"><span>🍼</span></button>
     </div>
     ${state.syncError ? bannerSyncErr() : ''}
@@ -1095,6 +1174,17 @@ function entryRow(e){
   const editable = !!e.id;
   const clickAttr = editable ? `data-edit="${e.kind}" data-id="${escapeAttr(e.id)}"` : '';
   const cls = editable ? 'entry editable' : 'entry';
+  if(e.kind==='sleep'){
+    const durationStr = e.endTs ? formatDuration(e.endTs - e.ts) : 'in progress';
+    return `<div class="${cls}" ${clickAttr}>
+      <div class="dot sleep" style="width:9px; height:9px;"></div>
+      <div class="main">
+        <div class="title">Slept ${durationStr}</div>
+      </div>
+      <div class="time">${fmtDay(e.ts)}<br>${fmtTime(e.ts)}</div>
+      ${editable ? `<div class="chev">›</div>` : ''}
+    </div>`;
+  }
   if(e.kind==='feed'){
     // Dot scales with bottle size: 150ml+ is treated as the practical max,
     // capped so it never grows past the label text's own font size (14.5px).
@@ -1188,6 +1278,39 @@ function renderTrends(){
   const wetVal = isDaily ? wet : perDay(wet);
   const dirtyVal = isDaily ? dirty : perDay(dirty);
 
+  // ---- Sleep stats ----
+  const sleeps = state.sleeps.filter(s=>withinHours(s.ts, state.period) && s.endTs);
+  const totalSleepMs = sleeps.reduce((sum,s)=>sum+(s.endTs-s.ts),0);
+  const sessionsLabel = isDaily ? 'sleep sessions' : 'avg sessions/day';
+  const sessionsVal = isDaily ? sleeps.length : perDay(sleeps.length);
+  const totalSleepLabel = isDaily ? 'total sleep' : 'avg sleep/day';
+  const totalSleepVal = formatDuration(isDaily ? totalSleepMs : totalSleepMs/numDays);
+  const avgSessionVal = sleeps.length ? formatDuration(totalSleepMs/sleeps.length) : '—';
+
+  // ---- Time-of-day patterns ----
+  // Night/morning/afternoon buckets, applied consistently across sleep,
+  // feeding, and diapers, so the same lens reveals whatever pattern
+  // actually exists in each — heavier night feeds, more afternoon naps,
+  // a diaper rush right after waking, whatever it turns out to be.
+  const bucketOf = (d)=>{ const h=d.getHours(); if(h>=20||h<6) return 'night'; if(h<12) return 'morning'; return 'afternoon'; };
+  const bucketDivisor = isDaily ? 1 : numDays;
+
+  const sleepBuckets = {morning:0, afternoon:0, night:0};
+  sleeps.forEach(s=>{ sleepBuckets[bucketOf(s.ts)] += (s.endTs-s.ts); });
+
+  const feedBuckets = {morning:0, afternoon:0, night:0};
+  feeds.forEach(f=>{ feedBuckets[bucketOf(f.ts)]++; });
+
+  const diaperBuckets = {morning:0, afternoon:0, night:0};
+  diapers.forEach(d=>{ diaperBuckets[bucketOf(d.ts)]++; });
+
+  const patternRow = (buckets, formatFn)=> `
+    <div class="statgrid" style="grid-template-columns:1fr 1fr 1fr;">
+      <div class="statbig"><div class="v">${formatFn(buckets.morning)}</div><div class="k">morning</div></div>
+      <div class="statbig"><div class="v">${formatFn(buckets.afternoon)}</div><div class="k">afternoon</div></div>
+      <div class="statbig"><div class="v">${formatFn(buckets.night)}</div><div class="k">night</div></div>
+    </div>`;
+
   const dot = (color)=>`<span class="sectiondot" style="background:${color}"></span>`;
 
   return `
@@ -1212,6 +1335,25 @@ function renderTrends(){
       <div class="statbig"><div class="v">${wetVal}</div><div class="k" style="color:var(--wet)">wet</div></div>
       <div class="statbig"><div class="v">${dirtyVal}</div><div class="k" style="color:var(--dirty)">dirty</div></div>
     </div>
+    <div class="sectiontitle">${dot('var(--sleep)')}Sleep — ${periodLabel(state.period)}</div>
+    <div class="statgrid">
+      <div class="statbig"><div class="v">${totalSleepVal}</div><div class="k">${totalSleepLabel}</div></div>
+      <div class="statbig"><div class="v">${sessionsVal}</div><div class="k">${sessionsLabel}</div></div>
+      <div class="statbig"><div class="v">${avgSessionVal}</div><div class="k">avg session length</div></div>
+    </div>
+    <div class="sectiontitle">${dot('var(--milk)')}Patterns by time of day</div>
+    <div class="chartcard">
+      <h3>Sleep</h3>
+      ${patternRow(sleepBuckets, (ms)=>formatDuration(ms/bucketDivisor))}
+    </div>
+    <div class="chartcard">
+      <h3>Feeding</h3>
+      ${patternRow(feedBuckets, (n)=>(n/bucketDivisor).toFixed(isDaily?0:1))}
+    </div>
+    <div class="chartcard">
+      <h3>Diapers</h3>
+      ${patternRow(diaperBuckets, (n)=>(n/bucketDivisor).toFixed(isDaily?0:1))}
+    </div>
     <div class="sectiontitle">${dot('var(--wet)')}Daily trends</div>
     <div class="chartcard">
       <h3>Bottles per day (ml)</h3>
@@ -1223,7 +1365,6 @@ function renderTrends(){
       <div class="legend">
         <span><i style="background:var(--wet)"></i>wet</span>
         <span><i style="background:var(--dirty)"></i>dirty</span>
-        <span><i style="background:var(--both)"></i>both</span>
       </div>
     </div>
     ${renderGrowthSection()}
@@ -1548,9 +1689,24 @@ function renderPickerField(prefix, dateObj, isOpen){
 // container in place, instead of re-rendering the whole modal — that
 // full re-render was what made the modal look like it was "refreshing"
 // and replaying its opening animation every time you touched the picker.
-function getPickerTimeValue(prefix){ return prefix==='feed' ? feedTimeValue : diaperTimeValue; }
-function setPickerTimeValue(prefix, val){ if(prefix==='feed') feedTimeValue = val; else diaperTimeValue = val; }
-function setPickerOpenFlag(prefix, val){ if(prefix==='feed') feedPickerOpen = val; else diaperPickerOpen = val; }
+function getPickerTimeValue(prefix){
+  if(prefix==='feed') return feedTimeValue;
+  if(prefix==='diaper') return diaperTimeValue;
+  if(prefix==='sleepstart') return sleepStartValue;
+  if(prefix==='sleepend') return sleepEndValue;
+}
+function setPickerTimeValue(prefix, val){
+  if(prefix==='feed') feedTimeValue = val;
+  else if(prefix==='diaper') diaperTimeValue = val;
+  else if(prefix==='sleepstart') sleepStartValue = val;
+  else if(prefix==='sleepend') sleepEndValue = val;
+}
+function setPickerOpenFlag(prefix, val){
+  if(prefix==='feed') feedPickerOpen = val;
+  else if(prefix==='diaper') diaperPickerOpen = val;
+  else if(prefix==='sleepstart') sleepStartPickerOpen = val;
+  else if(prefix==='sleepend') sleepEndPickerOpen = val;
+}
 
 function bindPickerToggle(prefix){
   const btn = document.getElementById(prefix+'-picker-toggle');
@@ -1571,7 +1727,23 @@ function bindPickerDone(prefix){
     const container = document.getElementById(prefix+'-picker-field');
     container.innerHTML = renderPickerField(prefix, dateObj, false);
     bindPickerToggle(prefix);
+    // Sleep's start/end pickers share a live duration readout that
+    // needs to reflect whichever value just changed — a plain DOM
+    // update here, same reasoning as everywhere else in this file:
+    // no full re-render just to reflect one changed field.
+    updateSleepDurationDisplay();
   };
+}
+function updateSleepDurationDisplay(){
+  const el = document.getElementById('sleep-duration-display');
+  if(!el || !sleepStartValue || !sleepEndValue) return;
+  el.textContent = formatDuration(sleepEndValue - sleepStartValue);
+}
+function formatDuration(ms){
+  if(ms <= 0) return '0m';
+  const totalMin = Math.round(ms/60000);
+  const h = Math.floor(totalMin/60), m = totalMin%60;
+  return h>0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 let feedAmount = 0;
@@ -1686,6 +1858,11 @@ let weightAmount = 0;
 let weightUnit = 'kg';
 let weightDateStr = null;
 
+let sleepStartValue = null;
+let sleepStartPickerOpen = false;
+let sleepEndValue = null;
+let sleepEndPickerOpen = false;
+
 function renderWeightModal(){
   const editing = !!state.editingId;
   const amtDisplay = (weightAmount === 0 && !editing) ? '' : weightAmount;
@@ -1719,6 +1896,36 @@ function renderWeightModal(){
   </div>`;
 }
 
+function renderSleepModal(){
+  const editing = !!state.editingId;
+  const duration = (sleepStartValue && sleepEndValue) ? formatDuration(sleepEndValue - sleepStartValue) : '—';
+  return `
+  <div class="modalbg" id="modal-bg-sleep">
+    <div class="modal">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+        <h2 style="margin:0;">${editing ? 'Edit sleep' : 'Log sleep'}</h2>
+        ${editing ? `<button class="iconbtn" id="sleep-delete" aria-label="Delete entry" style="background:var(--surface-2); color:var(--text-dim); width:34px; height:34px; border-radius:50%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
+      </div>
+      <div style="text-align:center; margin-bottom:20px;">
+        <div style="font-size:34px; font-weight:500; color:var(--sleep); font-variant-numeric:tabular-nums;" id="sleep-duration-display">${duration}</div>
+        <div style="font-size:13px; color:var(--text-dim); margin-top:2px;">total sleep</div>
+      </div>
+      <div class="field">
+        <label>Fell asleep</label>
+        <div id="sleepstart-picker-field">${renderPickerField('sleepstart', sleepStartValue, sleepStartPickerOpen)}</div>
+      </div>
+      <div class="field">
+        <label>Woke up</label>
+        <div id="sleepend-picker-field">${renderPickerField('sleepend', sleepEndValue, sleepEndPickerOpen)}</div>
+      </div>
+      <div class="modalbtns">
+        <button class="btn ghost" id="sleep-cancel">Cancel</button>
+        <button class="btn primary" id="sleep-save">Save</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function openAddWeight(){
   if(state.modal) return;
   state.editingId = null; weightAmount = 0; weightUnit = 'kg';
@@ -1732,6 +1939,30 @@ function openEditWeight(id){
   state.editingId = id; weightAmount = entry.weightKg; weightUnit = 'kg';
   weightDateStr = dateStrFromDate(entry.ts);
   state.modal = 'weight'; render();
+}
+
+// Sleep has no "openAddSleep" — starting a sleep session is instant (just
+// tapping the button, no modal needed, since the whole point is marking
+// the moment it begins). A modal only appears when *ending* it, to
+// confirm/adjust the times before saving, or when editing a past entry.
+function openEndSleep(){
+  if(state.modal) return;
+  if(!state.activeSleepStart) return;
+  state.editingId = null;
+  sleepStartValue = state.activeSleepStart;
+  sleepEndValue = new Date();
+  sleepStartPickerOpen = false; sleepEndPickerOpen = false;
+  state.modal = 'sleep'; render();
+}
+function openEditSleep(id){
+  if(state.modal) return;
+  const entry = state.sleeps.find(s=>s.id===id);
+  if(!entry) return;
+  state.editingId = id;
+  sleepStartValue = entry.ts;
+  sleepEndValue = entry.endTs || new Date();
+  sleepStartPickerOpen = false; sleepEndPickerOpen = false;
+  state.modal = 'sleep'; render();
 }
 
 /* ---------------- event wiring ---------------- */
@@ -1753,8 +1984,20 @@ function attachHandlers(){
   document.querySelectorAll('[data-open]').forEach(b=>{
     b.onclick = ()=>{ if(b.dataset.open==='feed') openAddFeed(); else openAddDiaper(); };
   });
-  const heartBtn = document.getElementById('heart-btn');
-  if(heartBtn) heartBtn.onclick = ()=> spawnFloatingHearts(heartBtn);
+  const heroPhotoTap = document.getElementById('hero-photo-tap');
+  if(heroPhotoTap) heroPhotoTap.onclick = ()=> spawnFloatingHearts(heroPhotoTap);
+  const sleepBtn = document.getElementById('sleep-btn');
+  if(sleepBtn) sleepBtn.onclick = ()=>{
+    if(state.activeSleepStart){
+      openEndSleep();
+    }else{
+      // Starting is instant, no modal — the whole point is marking the
+      // moment she starts sleeping without any friction in the way.
+      state.activeSleepStart = new Date();
+      saveActiveSleep();
+      render();
+    }
+  };
   document.querySelectorAll('[data-period]').forEach(b=>{
     b.onclick = ()=>{ state.period = Number(b.dataset.period); render(); if(state.tab==='trends') setTimeout(drawCharts, 30); };
   });
@@ -1877,6 +2120,33 @@ function attachHandlers(){
     render();
   };
 
+  bindPickerToggle('sleepstart');
+  if(sleepStartPickerOpen) bindPickerDone('sleepstart');
+  bindPickerToggle('sleepend');
+  if(sleepEndPickerOpen) bindPickerDone('sleepend');
+  const sleepCancel = document.getElementById('sleep-cancel');
+  if(sleepCancel) sleepCancel.onclick = ()=>{ state.modal=null; state.editingId=null; render(); scrollToTop(); };
+  const sleepSave = document.getElementById('sleep-save');
+  if(sleepSave) sleepSave.onclick = async ()=>{
+    if(sleepSave.disabled) return;
+    sleepSave.disabled = true;
+    const startObj = sleepStartPickerOpen ? readWheelPicker('sleepstart') : sleepStartValue;
+    const endObj = sleepEndPickerOpen ? readWheelPicker('sleepend') : sleepEndValue;
+    if(state.editingId){
+      await updateSleep(state.editingId, startObj, endObj);
+    }else{
+      state.activeSleepStart = null;
+      saveActiveSleep();
+      await logSleep(startObj, endObj);
+    }
+  };
+  const sleepDelete = document.getElementById('sleep-delete');
+  if(sleepDelete) sleepDelete.onclick = ()=>{
+    const id = state.editingId;
+    state.confirmDelete = { message:'Delete this sleep entry?', onConfirm: async ()=>{ await deleteSleep(id); } };
+    render();
+  };
+
   /* tap an entry row to edit it */
   document.querySelectorAll('[data-edit]').forEach(row=>{
     row.onclick = ()=>{
@@ -1884,6 +2154,7 @@ function attachHandlers(){
       const id = row.dataset.id;
       if(kind==='feed') openEditFeed(id);
       else if(kind==='weight') openEditWeight(id);
+      else if(kind==='sleep') openEditSleep(id);
       else openEditDiaper(id);
     };
   });
@@ -1909,6 +2180,7 @@ function setupViewportGuard(){
 /* ---------------- boot ---------------- */
 (async function boot(){
   await loadConfig();
+  loadActiveSleep();
   if(loadCache()){ state.loaded = true; } // instant first paint from last-known data
   render();
   if(state.config) fetchAll(); // quietly refreshes with live data in the background
