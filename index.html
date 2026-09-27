@@ -200,15 +200,32 @@
   @keyframes shimmer-fadeout{ to{ opacity:0; } }
 
   /* a clearly visible "she's sleeping right now" state on the sleep
-     button — a soft breathing pulse plus a colored ring, so it's obvious
-     at a glance without needing to tap anything to check */
+     button — this needs to be unmistakable at a glance, not subtle, so
+     it switches to a solid, distinctly-colored fill (rather than a
+     border tweak on the same glass look) plus a stronger glowing pulse */
   .actionbtn.sleep.active{
-    border-color:rgba(138,155,216,0.7);
-    animation:sleep-breathe 2.6s ease-in-out infinite;
+    background:linear-gradient(135deg, var(--sleep), #4a5a9e);
+    border-color:var(--sleep);
+    animation:sleep-breathe 2.2s ease-in-out infinite;
   }
   @keyframes sleep-breathe{
-    0%, 100%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 0 rgba(138,155,216,0.5); }
-    50%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 8px rgba(138,155,216,0); }
+    0%, 100%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 0 rgba(138,155,216,0.6); }
+    50%{ box-shadow:0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.5), inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -16px 22px rgba(0,0,0,0.3), 0 0 0 12px rgba(138,155,216,0); }
+  }
+
+  /* recurring floating "Zzz" while a sleep session is active — a gentle,
+     repeating reminder rather than the one-off heart burst */
+  .floating-zzz{
+    position:fixed;
+    font-size:22px;
+    pointer-events:none;
+    z-index:80;
+    animation:float-zzz 3s ease-out forwards;
+  }
+  @keyframes float-zzz{
+    0%{ transform:translate(0,0) scale(0.7); opacity:0; }
+    20%{ opacity:0.9; transform:translate(6px,-24px) scale(1); }
+    100%{ transform:translate(16px,-100px) scale(1.05); opacity:0; }
   }
 
   /* floating hearts burst, triggered on tapping the heart button */
@@ -702,6 +719,22 @@ function spawnFloatingHearts(fromEl){
   setTimeout(()=> flash.remove(), 2600);
 }
 
+// A gentle, recurring cue while a sleep session is active — spawned on
+// an interval elsewhere, not a one-off burst like the hearts, since the
+// point here is an ongoing reminder that tracking is still running.
+function spawnSleepZzz(fromEl){
+  const rect = fromEl.getBoundingClientRect();
+  const originX = rect.left + rect.width*0.7;
+  const originY = rect.top + rect.height*0.2;
+  const el = document.createElement('span');
+  el.className = 'floating-zzz';
+  el.textContent = '💤';
+  el.style.left = (originX - 11) + 'px';
+  el.style.top = (originY - 11) + 'px';
+  document.body.appendChild(el);
+  setTimeout(()=> el.remove(), 3200);
+}
+
 
 const CACHE_KEY = 'kunju_data_cache';
 const ACTIVE_SLEEP_KEY = 'kunju_active_sleep';
@@ -1159,6 +1192,7 @@ function renderHome(){
       <button class="actionbtn sleep ${state.activeSleepStart ? 'active' : ''}" id="sleep-btn" aria-label="${state.activeSleepStart ? 'End sleep' : 'Start sleep'}"><span>😴</span></button>
       <button class="actionbtn feed" data-open="feed" aria-label="Log bottle"><span>🍼</span></button>
     </div>
+    ${state.activeSleepStart ? `<div style="text-align:center; font-size:13.5px; color:var(--sleep); font-weight:600; margin-top:2px;">😴 Sleep time starting — since ${fmtTime(state.activeSleepStart)}. Tap again to log it.</div>` : ''}
     ${state.syncError ? bannerSyncErr() : ''}
     <div class="sectiontitle" style="margin-top:26px; margin-bottom:2px; border-bottom:none; padding-bottom:0; display:flex; align-items:center; gap:8px;">
       <span>Recent activity</span>
@@ -2186,6 +2220,12 @@ function setupViewportGuard(){
   if(state.config) fetchAll(); // quietly refreshes with live data in the background
   setupViewportGuard();
   setInterval(()=>{ if(state.tab==='home' && !state.modal) render(); }, 60000);
+  setInterval(()=>{
+    if(state.activeSleepStart && state.tab==='home' && !state.modal){
+      const btn = document.getElementById('sleep-btn');
+      if(btn) spawnSleepZzz(btn);
+    }
+  }, 4000);
 
   // Two people are using this from separate devices, so this device's
   // own view can go stale the moment the OTHER person logs something —
