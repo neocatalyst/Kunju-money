@@ -1032,6 +1032,19 @@ async function updateSleep(id, startObj, endObj){
   try{ await postRow('Sleeps', { action:'update', id, timestamp: startObj.toISOString(), endTimestamp: endObj.toISOString(), loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
   fetchAll();
 }
+// For adjusting when an ongoing session actually started, without
+// ending it — she hasn't woken up yet, there's no end time to give.
+// Keeps EndTimestamp blank so the session is still correctly "active"
+// (per getActiveSleep) after this saves.
+async function updateSleepStart(id, startObj){
+  const entry = state.sleeps.find(s=>s.id===id);
+  if(entry){ entry.ts = startObj; }
+  state.sleeps.sort((a,b)=>b.ts-a.ts);
+  state.modal = null; state.editingId = null;
+  render(); scrollToTop();
+  try{ await postRow('Sleeps', { action:'update', id, timestamp: startObj.toISOString(), endTimestamp: '', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+  fetchAll();
+}
 
 async function deleteFeed(id){
   state.feedings = state.feedings.filter(f=>f.id!==id);
@@ -1202,7 +1215,7 @@ function renderHome(){
       <button class="actionbtn sleep ${activeSleep ? 'active' : ''}" id="sleep-btn" aria-label="${activeSleep ? 'End sleep' : 'Start sleep'}"><span>😴</span></button>
       <button class="actionbtn feed" data-open="feed" aria-label="Log bottle"><span>🍼</span></button>
     </div>
-    ${activeSleep ? `<div style="text-align:center; font-size:13.5px; color:var(--sleep); font-weight:400; margin-top:2px;">😴 Sleep time started since ${fmtTime(activeSleep.ts)}</div>` : ''}
+    ${activeSleep ? `<div style="text-align:center; font-size:13.5px; color:var(--sleep); font-weight:400; margin-top:14px;">😴 Sleep time started since ${fmtTime(activeSleep.ts)}</div>` : ''}
     ${state.syncError ? bannerSyncErr() : ''}
     <div class="sectiontitle" style="margin-top:26px; margin-bottom:2px; border-bottom:none; padding-bottom:0; display:flex; align-items:center; gap:8px;">
       <span>Recent activity</span>
@@ -1304,6 +1317,17 @@ function renderTrends(){
   const mlLabel = isDaily ? 'total ml' : 'avg ml/day';
   const mlVal = isDaily ? Math.round(totalMl) : Math.round(totalMl/numDays);
 
+  // "Up or down from yesterday" — only meaningful for the 24h view,
+  // since week/month are already averages rather than a single day to
+  // compare against a single other day.
+  const yesterdayFeeds = state.feedings.filter(f=>{ const h=(Date.now()-f.ts)/3600000; return h>24 && h<=48; });
+  const yesterdayMl = yesterdayFeeds.reduce((s,f)=>s+toMl(f.amount,f.unit),0);
+  const mlVsYesterday = Math.round(totalMl - yesterdayMl);
+  const bottlesVsYesterday = feeds.length - yesterdayFeeds.length;
+  const feedCompareText = isDaily && yesterdayFeeds.length>0
+    ? `${mlVsYesterday>=0?'↑':'↓'} ${Math.abs(mlVsYesterday)} ml and ${bottlesVsYesterday>=0?'↑':'↓'} ${Math.abs(bottlesVsYesterday)} bottle${Math.abs(bottlesVsYesterday)===1?'':'s'} vs yesterday`
+    : null;
+
   let avgIntervalStr = '—';
   if(feeds.length>1){
     const sorted = [...feeds].sort((a,b)=>a.ts-b.ts);
@@ -1321,6 +1345,12 @@ function renderTrends(){
   const changesVal = isDaily ? diapers.length : perDay(diapers.length);
   const wetVal = isDaily ? wet : perDay(wet);
   const dirtyVal = isDaily ? dirty : perDay(dirty);
+
+  const yesterdayDiapers = state.diapers.filter(d=>{ const h=(Date.now()-d.ts)/3600000; return h>24 && h<=48; });
+  const diaperVsYesterday = diapers.length - yesterdayDiapers.length;
+  const diaperCompareText = isDaily && yesterdayDiapers.length>0
+    ? `${diaperVsYesterday>=0?'↑':'↓'} ${Math.abs(diaperVsYesterday)} change${Math.abs(diaperVsYesterday)===1?'':'s'} vs yesterday`
+    : null;
 
   // ---- Sleep stats ----
   const sleeps = state.sleeps.filter(s=>withinHours(s.ts, state.period) && s.endTs);
@@ -1373,12 +1403,14 @@ function renderTrends(){
       <div class="statbig"><div class="v">${Math.round(avgMl)}</div><div class="k">avg ml / bottle</div></div>
       <div class="statbig"><div class="v">${avgIntervalStr}</div><div class="k">avg time between</div></div>
     </div>
+    ${feedCompareText ? `<div style="font-size:12.5px; color:var(--text-dim); margin-top:10px;">${feedCompareText}</div>` : ''}
     <div class="sectiontitle">${dot('var(--diaper)')}Diapers — ${periodLabel(state.period)}</div>
     <div class="statgrid">
       <div class="statbig"><div class="v">${changesVal}</div><div class="k">${changesLabel}</div></div>
       <div class="statbig"><div class="v">${wetVal}</div><div class="k" style="color:var(--wet)">wet</div></div>
       <div class="statbig"><div class="v">${dirtyVal}</div><div class="k" style="color:var(--dirty)">dirty</div></div>
     </div>
+    ${diaperCompareText ? `<div style="font-size:12.5px; color:var(--text-dim); margin-top:10px;">${diaperCompareText}</div>` : ''}
     <div class="sectiontitle">${dot('var(--sleep)')}Sleep — ${periodLabel(state.period)}</div>
     <div class="statgrid">
       <div class="statbig"><div class="v">${totalSleepVal}</div><div class="k">${totalSleepLabel}</div></div>
@@ -1907,6 +1939,7 @@ let sleepStartPickerOpen = false;
 let sleepEndValue = null;
 let sleepEndPickerOpen = false;
 let sleepEndingActive = false; // true when this modal is ending a currently-active session, not editing a past one
+let sleepIsOngoing = false; // true when editing an entry that has no end time yet (no "Woke up" field shown, Save only touches the start time)
 
 function renderWeightModal(){
   const editing = !!state.editingId;
@@ -1942,10 +1975,10 @@ function renderWeightModal(){
 }
 
 function renderSleepModal(){
-  const editingPast = !!state.editingId && !sleepEndingActive;
+  const editingPast = !!state.editingId && !sleepEndingActive && !sleepIsOngoing;
   const hasExistingEntry = !!state.editingId; // true both when ending an active session and when editing a past one — either way there's a real row to discard
   const duration = (sleepStartValue && sleepEndValue) ? formatDuration(sleepEndValue - sleepStartValue) : '—';
-  const heading = sleepEndingActive ? 'End sleep' : (editingPast ? 'Edit sleep' : 'Log sleep');
+  const heading = sleepEndingActive ? 'End sleep' : (sleepIsOngoing ? 'Still sleeping' : (editingPast ? 'Edit sleep' : 'Log sleep'));
   return `
   <div class="modalbg" id="modal-bg-sleep">
     <div class="modal">
@@ -1953,6 +1986,16 @@ function renderSleepModal(){
         <h2 style="margin:0;">${heading}</h2>
         ${hasExistingEntry ? `<button class="iconbtn" id="sleep-delete" aria-label="Delete entry" style="background:var(--surface-2); color:var(--text-dim); width:34px; height:34px; border-radius:50%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></button>` : ''}
       </div>
+      ${sleepIsOngoing ? `
+      <div style="text-align:center; margin-bottom:20px;">
+        <div style="font-size:22px; font-weight:500; color:var(--sleep);">😴 Still sleeping</div>
+        <div style="font-size:13px; color:var(--text-dim); margin-top:4px;">No wake time yet — just adjust when she actually fell asleep below.</div>
+      </div>
+      <div class="field">
+        <label>Fell asleep</label>
+        <div id="sleepstart-picker-field">${renderPickerField('sleepstart', sleepStartValue, sleepStartPickerOpen)}</div>
+      </div>
+      ` : `
       <div style="text-align:center; margin-bottom:20px;">
         <div style="font-size:34px; font-weight:500; color:var(--sleep); font-variant-numeric:tabular-nums;" id="sleep-duration-display">${duration}</div>
         <div style="font-size:13px; color:var(--text-dim); margin-top:2px;">total sleep</div>
@@ -1965,6 +2008,7 @@ function renderSleepModal(){
         <label>Woke up</label>
         <div id="sleepend-picker-field">${renderPickerField('sleepend', sleepEndValue, sleepEndPickerOpen)}</div>
       </div>
+      `}
       <div class="modalbtns">
         <button class="btn ghost" id="sleep-cancel">Cancel</button>
         <button class="btn primary" id="sleep-save">Save</button>
@@ -2004,6 +2048,7 @@ function openEndSleep(){
   sleepEndValue = new Date();
   sleepStartPickerOpen = false; sleepEndPickerOpen = false;
   sleepEndingActive = true;
+  sleepIsOngoing = false;
   state.modal = 'sleep'; render();
 }
 function openEditSleep(id){
@@ -2015,6 +2060,7 @@ function openEditSleep(id){
   sleepEndValue = entry.endTs || new Date();
   sleepStartPickerOpen = false; sleepEndPickerOpen = false;
   sleepEndingActive = false;
+  sleepIsOngoing = !entry.endTs;
   state.modal = 'sleep'; render();
 }
 
@@ -2186,6 +2232,13 @@ function attachHandlers(){
     if(sleepSave.disabled) return;
     sleepSave.disabled = true;
     const startObj = sleepStartPickerOpen ? readWheelPicker('sleepstart') : sleepStartValue;
+    // Still-ongoing mode has no "Woke up" field at all, so there's
+    // nothing to read there — only the start time changes, and the
+    // entry stays active (no end time) after saving.
+    if(sleepIsOngoing){
+      await updateSleepStart(state.editingId, startObj);
+      return;
+    }
     const endObj = sleepEndPickerOpen ? readWheelPicker('sleepend') : sleepEndValue;
     // Ending an active session and editing a past entry both land here
     // as an update now, since ending one just fills in the end time on
