@@ -800,20 +800,28 @@ async function fetchAll(){
     const wJson = await wRes.json();
     const sJson = await sRes.json();
     if(fJson.error || dJson.error || wJson.error || sJson.error) throw new Error(fJson.error || dJson.error || wJson.error || sJson.error);
-    state.feedings = (Array.isArray(fJson)?fJson:[]).map(normalizeFeed).filter(x=>x.ts);
-    state.diapers = (Array.isArray(dJson)?dJson:[]).map(normalizeDiaper).filter(x=>x.ts);
-    state.weights = (Array.isArray(wJson)?wJson:[]).map(normalizeWeight).filter(x=>x.ts);
-    state.sleeps = (Array.isArray(sJson)?sJson:[]).map(normalizeSleep).filter(x=>x.ts);
-    state.feedings.sort((a,b)=>b.ts-a.ts);
-    state.diapers.sort((a,b)=>b.ts-a.ts);
-    state.weights.sort((a,b)=>b.ts-a.ts);
-    state.sleeps.sort((a,b)=>b.ts-a.ts);
+    // Deliberately just returning parsed data here, NOT writing to
+    // `state` yet. That's the actual fix: the previous version mutated
+    // state.feedings/diapers/etc directly inside this function, several
+    // steps before the generation check below ever ran — so a stale,
+    // superseded fetch could (and did) overwrite fresher data with old
+    // data before anything had a chance to stop it. Returning a plain
+    // result and only applying it after confirming isCurrent() is what
+    // actually closes that gap, rather than just checking too late.
+    const feedings = (Array.isArray(fJson)?fJson:[]).map(normalizeFeed).filter(x=>x.ts);
+    const diapers = (Array.isArray(dJson)?dJson:[]).map(normalizeDiaper).filter(x=>x.ts);
+    const weights = (Array.isArray(wJson)?wJson:[]).map(normalizeWeight).filter(x=>x.ts);
+    const sleeps = (Array.isArray(sJson)?sJson:[]).map(normalizeSleep).filter(x=>x.ts);
+    feedings.sort((a,b)=>b.ts-a.ts);
+    diapers.sort((a,b)=>b.ts-a.ts);
+    weights.sort((a,b)=>b.ts-a.ts);
+    sleeps.sort((a,b)=>b.ts-a.ts);
+    return { feedings, diapers, weights, sleeps };
   };
 
-  let ok = false;
+  let result = null;
   try{
-    await attempt();
-    ok = true;
+    result = await attempt();
   }catch(e1){
     // A single failed attempt is very often just a momentary blip —
     // wifi/cellular handoff, the screen waking up before the network's
@@ -824,16 +832,19 @@ async function fetchAll(){
     await new Promise(r=>setTimeout(r, 1500));
     if(!isCurrent()) return; // a newer fetch has taken over; abandon this one entirely
     try{
-      await attempt();
-      ok = true;
+      result = await attempt();
     }catch(e2){
-      ok = false;
+      result = null;
     }
   }
 
-  if(!isCurrent()) return; // superseded by a newer fetch while this one was finishing
+  if(!isCurrent()) return; // superseded by a newer fetch — discard this result entirely, untouched
 
-  if(ok){
+  if(result){
+    state.feedings = result.feedings;
+    state.diapers = result.diapers;
+    state.weights = result.weights;
+    state.sleeps = result.sleeps;
     state.loaded = true;
     state.syncError = false;
     saveCache();
@@ -922,8 +933,16 @@ async function logFeed(amount, unit, dateObj){
   state.feedings.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
   render(); scrollToTop();
-  try{ await postRow('Feedings', { action:'add', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  // No fetchAll() after this on purpose (same for every other
+  // add/update/delete function below). The screen is already showing
+  // the correct result the instant this renders — refetching all four
+  // sheets again immediately after would just be confirming something
+  // already known, adding a round-trip for no visible benefit, and it
+  // was also the main source of the overlapping-fetch races that caused
+  // entries to flicker in and out. Catching up on the OTHER person's
+  // changes is handled separately, by the periodic/visibility-triggered
+  // syncs elsewhere in this file.
+  try{ await postRow('Feedings', { action:'add', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 async function logDiaper(type, dateObj){
   state.modal = null;
@@ -937,17 +956,16 @@ async function logDiaper(type, dateObj){
     state.diapers.unshift({ id:idWet, ts:dateObj, type:'wet' }, { id:idDirty, ts:dateObj, type:'dirty' });
     state.diapers.sort((a,b)=>b.ts-a.ts);
     render(); scrollToTop();
-    try{ await postRow('Diapers', { action:'add', id:idWet, timestamp: dateObj.toISOString(), type:'wet', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-    try{ await postRow('Diapers', { action:'add', id:idDirty, timestamp: dateObj.toISOString(), type:'dirty', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+    try{ await postRow('Diapers', { action:'add', id:idWet, timestamp: dateObj.toISOString(), type:'wet', loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
+    try{ await postRow('Diapers', { action:'add', id:idDirty, timestamp: dateObj.toISOString(), type:'dirty', loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
   }else{
     const id = genId();
     const row = { id, ts: dateObj, type };
     state.diapers.unshift(row);
     state.diapers.sort((a,b)=>b.ts-a.ts);
     render(); scrollToTop();
-    try{ await postRow('Diapers', { action:'add', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+    try{ await postRow('Diapers', { action:'add', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
   }
-  fetchAll();
 }
 async function logWeight(weightKg, dateObj){
   const id = genId();
@@ -956,8 +974,7 @@ async function logWeight(weightKg, dateObj){
   state.weights.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
   render(); scrollToTop();
-  try{ await postRow('Weights', { action:'add', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Weights', { action:'add', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 
 async function updateFeed(id, amount, unit, dateObj){
@@ -966,8 +983,7 @@ async function updateFeed(id, amount, unit, dateObj){
   state.feedings.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  try{ await postRow('Feedings', { action:'update', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Feedings', { action:'update', id, timestamp: dateObj.toISOString(), amount, unit, loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 async function updateDiaper(id, type, dateObj){
   const entry = state.diapers.find(d=>d.id===id);
@@ -982,15 +998,14 @@ async function updateDiaper(id, type, dateObj){
     state.diapers.unshift({ id:newDirtyId, ts:dateObj, type:'dirty' });
     state.diapers.sort((a,b)=>b.ts-a.ts);
     render(); scrollToTop();
-    try{ await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type:'wet', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-    try{ await postRow('Diapers', { action:'add', id:newDirtyId, timestamp: dateObj.toISOString(), type:'dirty', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+    try{ await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type:'wet', loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
+    try{ await postRow('Diapers', { action:'add', id:newDirtyId, timestamp: dateObj.toISOString(), type:'dirty', loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
   }else{
     if(entry){ entry.type = type; entry.ts = dateObj; }
     state.diapers.sort((a,b)=>b.ts-a.ts);
     render(); scrollToTop();
-    try{ await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
+    try{ await postRow('Diapers', { action:'update', id, timestamp: dateObj.toISOString(), type, loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
   }
-  fetchAll();
 }
 async function updateWeight(id, weightKg, dateObj){
   const entry = state.weights.find(w=>w.id===id);
@@ -998,8 +1013,7 @@ async function updateWeight(id, weightKg, dateObj){
   state.weights.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  try{ await postRow('Weights', { action:'update', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Weights', { action:'update', id, timestamp: dateObj.toISOString(), weight: weightKg, loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 async function logSleep(startObj, endObj){
   const id = genId();
@@ -1008,8 +1022,7 @@ async function logSleep(startObj, endObj){
   state.sleeps.sort((a,b)=>b.ts-a.ts);
   state.modal = null;
   render(); scrollToTop();
-  try{ await postRow('Sleeps', { action:'add', id, timestamp: startObj.toISOString(), endTimestamp: endObj.toISOString(), loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Sleeps', { action:'add', id, timestamp: startObj.toISOString(), endTimestamp: endObj.toISOString(), loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 // Starting a sleep writes a real row to the shared sheet immediately,
 // with the end time left blank — that row (not any device-local flag)
@@ -1020,8 +1033,7 @@ async function startSleep(){
   const startTs = new Date();
   state.sleeps.unshift({ id, ts:startTs, endTs:null });
   render();
-  try{ await postRow('Sleeps', { action:'add', id, timestamp: startTs.toISOString(), endTimestamp: '', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Sleeps', { action:'add', id, timestamp: startTs.toISOString(), endTimestamp: '', loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 async function updateSleep(id, startObj, endObj){
   const entry = state.sleeps.find(s=>s.id===id);
@@ -1029,8 +1041,7 @@ async function updateSleep(id, startObj, endObj){
   state.sleeps.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  try{ await postRow('Sleeps', { action:'update', id, timestamp: startObj.toISOString(), endTimestamp: endObj.toISOString(), loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Sleeps', { action:'update', id, timestamp: startObj.toISOString(), endTimestamp: endObj.toISOString(), loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 // For adjusting when an ongoing session actually started, without
 // ending it — she hasn't woken up yet, there's no end time to give.
@@ -1042,37 +1053,32 @@ async function updateSleepStart(id, startObj){
   state.sleeps.sort((a,b)=>b.ts-a.ts);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  try{ await postRow('Sleeps', { action:'update', id, timestamp: startObj.toISOString(), endTimestamp: '', loggedBy: '' }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Sleeps', { action:'update', id, timestamp: startObj.toISOString(), endTimestamp: '', loggedBy: '' }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 
 async function deleteFeed(id){
   state.feedings = state.feedings.filter(f=>f.id!==id);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  try{ await postRow('Feedings', { action:'delete', id }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Feedings', { action:'delete', id }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 async function deleteDiaper(id){
   state.diapers = state.diapers.filter(d=>d.id!==id);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  try{ await postRow('Diapers', { action:'delete', id }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Diapers', { action:'delete', id }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 async function deleteWeight(id){
   state.weights = state.weights.filter(w=>w.id!==id);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  try{ await postRow('Weights', { action:'delete', id }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Weights', { action:'delete', id }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 async function deleteSleep(id){
   state.sleeps = state.sleeps.filter(s=>s.id!==id);
   state.modal = null; state.editingId = null;
   render(); scrollToTop();
-  try{ await postRow('Sleeps', { action:'delete', id }); }catch(e){ /* already flagged via state.syncError; still reconcile below */ }
-  fetchAll();
+  try{ await postRow('Sleeps', { action:'delete', id }); }catch(e){ /* failure is already flagged via state.syncError inside postRow */ }
 }
 
 
