@@ -579,6 +579,16 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzg80UZ8CATTR91HqWhezRG
 // automated abuse, not real security — see the Settings tab note.
 const API_KEY = "9G-nekyWDuGTE5sJNULr4wPigZUeMEqR";
 
+// How many days of Feedings/Diapers/Sleeps history to ask the backend
+// for on each sync. Trends' own "Month" view (30 days) is the longest
+// lookback anything in this app ever needs, so this stays a few days
+// above that as a small buffer rather than matching it exactly. Keeping
+// this bounded — instead of fetching full history forever — is what
+// stops sync time from growing indefinitely the longer the app gets
+// used. Weights is exempt from this cap on the backend, since growth
+// tracking wants full history and that sheet stays small regardless.
+const RECENT_DAYS = 35;
+
 // Her date of birth, used to compute age for the growth percentile chart.
 const BIRTH_DATE = new Date('2026-07-10T00:00:00');
 
@@ -786,20 +796,23 @@ async function fetchAll(){
   const attempt = async ()=>{
     const withTimeout = (url)=>{
       const controller = new AbortController();
-      const timer = setTimeout(()=>controller.abort(), 12000);
+      const timer = setTimeout(()=>controller.abort(), 15000);
       return fetch(url, {signal: controller.signal}).finally(()=>clearTimeout(timer));
     };
-    const [fRes, dRes, wRes, sRes] = await Promise.all([
-      withTimeout(sheetBase() + '?sheet=Feedings&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
-      withTimeout(sheetBase() + '?sheet=Diapers&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
-      withTimeout(sheetBase() + '?sheet=Weights&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now()),
-      withTimeout(sheetBase() + '?sheet=Sleeps&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now())
-    ]);
-    const fJson = await fRes.json();
-    const dJson = await dRes.json();
-    const wJson = await wRes.json();
-    const sJson = await sRes.json();
-    if(fJson.error || dJson.error || wJson.error || sJson.error) throw new Error(fJson.error || dJson.error || wJson.error || sJson.error);
+    // One combined request instead of four separate parallel ones. Two
+    // things changed on the backend to make this worthwhile: (1) it's a
+    // single Apps Script execution now rather than four competing for
+    // Google's limited concurrent-execution slots, and (2) the backend
+    // itself now caps Feedings/Diapers/Sleeps to the last RECENT_DAYS
+    // days — nothing in this app ever looks back further than that
+    // (Trends' "Month" view is the longest lookback that exists) — so
+    // the response size stops growing the longer you use the app,
+    // instead of silently re-sending months of history on every sync.
+    // Weights is asked for without that cap, since growth tracking
+    // benefits from full history and that sheet stays small regardless.
+    const res = await withTimeout(sheetBase() + '?sheet=all&days=' + RECENT_DAYS + '&key=' + encodeURIComponent(API_KEY) + '&t=' + Date.now());
+    const json = await res.json();
+    if(json.error) throw new Error(json.error);
     // Deliberately just returning parsed data here, NOT writing to
     // `state` yet. That's the actual fix: the previous version mutated
     // state.feedings/diapers/etc directly inside this function, several
@@ -808,10 +821,10 @@ async function fetchAll(){
     // data before anything had a chance to stop it. Returning a plain
     // result and only applying it after confirming isCurrent() is what
     // actually closes that gap, rather than just checking too late.
-    const feedings = (Array.isArray(fJson)?fJson:[]).map(normalizeFeed).filter(x=>x.ts);
-    const diapers = (Array.isArray(dJson)?dJson:[]).map(normalizeDiaper).filter(x=>x.ts);
-    const weights = (Array.isArray(wJson)?wJson:[]).map(normalizeWeight).filter(x=>x.ts);
-    const sleeps = (Array.isArray(sJson)?sJson:[]).map(normalizeSleep).filter(x=>x.ts);
+    const feedings = (Array.isArray(json.feedings)?json.feedings:[]).map(normalizeFeed).filter(x=>x.ts);
+    const diapers = (Array.isArray(json.diapers)?json.diapers:[]).map(normalizeDiaper).filter(x=>x.ts);
+    const weights = (Array.isArray(json.weights)?json.weights:[]).map(normalizeWeight).filter(x=>x.ts);
+    const sleeps = (Array.isArray(json.sleeps)?json.sleeps:[]).map(normalizeSleep).filter(x=>x.ts);
     feedings.sort((a,b)=>b.ts-a.ts);
     diapers.sort((a,b)=>b.ts-a.ts);
     weights.sort((a,b)=>b.ts-a.ts);
